@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Garden Almanac</title>
+  <meta name="description" content="A pocket farmer's almanac: what to plant today for your ZIP code, with dated schedules for germination, transplanting, fertilizing and harvest. Works offline.">
+  <meta name="theme-color" content="#3f6b3a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Almanac">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="34" height="34">
+      <div>
+        <h1>Garden Almanac</h1>
+        <button id="locChip" class="loc-chip" type="button" hidden></button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="plan" aria-selected="true">Plant</button>
+      <button role="tab" data-tab="garden" aria-selected="false">My Garden <span id="taskBadge" class="badge" hidden></span></button>
+      <button role="tab" data-tab="about" aria-selected="false">About</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Location setup -->
+    <section id="setup" class="view" hidden>
+      <div class="card setup-card">
+        <h2>Where do you garden?</h2>
+        <p class="muted">Enter your ZIP code to look up your USDA hardiness zone and typical frost dates. Everything stays on this device.</p>
+        <form id="zipForm" class="zip-form" autocomplete="off">
+          <input id="zipInput" inputmode="numeric" pattern="\d{5}" maxlength="5" placeholder="ZIP code" aria-label="ZIP code" required>
+          <button class="btn primary" type="submit">Look up</button>
+        </form>
+        <p id="zipError" class="error" hidden></p>
+        <details class="manual">
+          <summary>Outside the lower 48, or no ZIP? Pick your zone</summary>
+          <select id="manualZone" aria-label="Hardiness zone"></select>
+          <button id="manualZoneBtn" class="btn" type="button">Use this zone</button>
+        </details>
+
+        <div id="zipResult" hidden>
+          <div class="zone-hero">
+            <div class="zone-badge"><span>Zone</span><strong id="zrZone"></strong></div>
+            <div>
+              <div id="zrPlace" class="place"></div>
+              <div id="zrTemp" class="muted"></div>
+            </div>
+          </div>
+          <div class="frost-edit">
+            <label>Last spring frost <input id="lfInput" type="date"></label>
+            <label>First fall frost <input id="ffInput" type="date"></label>
+          </div>
+          <p class="muted small">These are typical dates for your zone. If you know your local frost dates (ask a neighbor or your county extension office), adjust them here. Every date in the app is calculated from them.</p>
+          <button id="saveLoc" class="btn primary wide" type="button">Save &amp; see what to plant</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plant chooser -->
+    <section id="plan" class="view" hidden>
+      <div class="card season">
+        <div class="season-row">
+          <label class="date-pick">
+            <span class="muted small">Planting date</span>
+            <input id="dateInput" type="date">
+          </label>
+          <button id="todayBtn" class="btn small" type="button" hidden>Back to today</button>
+        </div>
+        <p id="seasonLine" class="season-line"></p>
+        <div class="frost-strip" aria-hidden="true"><div id="frostBar"></div></div>
+      </div>
+
+      <div class="filters">
+        <input id="search" type="search" placeholder="Search plants" aria-label="Search plants">
+        <div id="catChips" class="chips"></div>
+      </div>
+
+      <div id="plantGroups"></div>
+    </section>
+
+    <!-- My garden -->
+    <section id="garden" class="view" hidden>
+      <div id="gardenBody"></div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="view" hidden>
+      <div class="card prose">
+        <h2>How it works</h2>
+        <p>Your ZIP code gives your USDA hardiness zone (2023 map). From the zone, the almanac estimates your <b>last spring frost</b> and <b>first fall frost</b>. Every planting window and date is counted from those two days, the same way extension services publish planting calendars.</p>
+        <p>Pick a date (today by default) and the almanac lists what can be planted now, what's coming up soon, and everything else. Check the plants you want and press <b>Plant</b> to get a dated schedule: germination, hardening off, transplanting, fertilizing, succession sowings and harvest.</p>
+        <h3>Use it offline / install it</h3>
+        <ul>
+          <li><b>iPhone / iPad:</b> open this page in Safari, tap the Share button, then <i>Add to Home Screen</i>.</li>
+          <li><b>Android:</b> open in Chrome, tap the ⋮ menu, then <i>Install app</i> or <i>Add to Home screen</i>.</li>
+          <li><b>Computer:</b> use the install icon in the address bar, or download the folder and open <code>index.html</code>.</li>
+        </ul>
+        <p id="offlineStatus" class="muted small"></p>
+        <h3>Good to know</h3>
+        <ul>
+          <li>Frost dates by zone are averages. Coastal, valley and mountain gardens can differ by 2–3 weeks; set your own dates in the location screen for the best results.</li>
+          <li>Days to harvest vary by variety. Check your seed packet and adjust.</li>
+          <li>Your location and garden are saved only in this browser on this device.</li>
+        </ul>
+        <h3>Data sources</h3>
+        <p class="small">USDA Plant Hardiness Zone Map (2023), ZIP code edition, produced by the PRISM Climate Group, Oregon State University. Place names from the open-source <i>zipcodes</i> package. Planting timings compiled from standard university extension planting guides.</p>
+        <div class="about-actions">
+          <button id="changeLoc" class="btn" type="button">Change location</button>
+          <button id="resetAll" class="btn danger" type="button">Erase all saved data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Sticky plant bar -->
+  <div id="plantBar" class="plant-bar" hidden>
+    <button id="clearSel" class="btn ghost" type="button">Clear</button>
+    <span id="selCount"></span>
+    <button id="plantBtn" class="btn primary" type="button">🌱 Plant</button>
+  </div>
+
+  <!-- Report -->
+  <div id="report" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+    <div class="overlay-inner">
+      <div class="report-actions">
+        <button id="closeReport" class="btn ghost" type="button" aria-label="Close report">✕ Close</button>
+        <div class="spacer"></div>
+        <button id="saveGarden" class="btn primary" type="button">Save to My Garden</button>
+      </div>
+      <div class="export-row">
+        <button id="exportIcs" class="btn small" type="button">📅 Add to calendar</button>
+        <button id="exportPng" class="btn small" type="button">🖼️ Save image</button>
+        <button id="exportPrint" class="btn small" type="button">🖨️ Print / PDF</button>
+        <button id="exportCsv" class="btn small" type="button">📄 CSV</button>
+      </div>
+      <article id="reportSheet" class="sheet"></article>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="data/plants.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
