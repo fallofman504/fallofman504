@@ -21,7 +21,8 @@ export async function readTakenDate(file, { fromCamera = false } = {}) {
   if (exif?.original) return { date: exif.original.date, source: 'taken', detail: `DateTimeOriginal ${exif.original.raw}` };
   if (exif?.digitized) return { date: exif.digitized.date, source: 'taken', detail: `DateTimeDigitized ${exif.digitized.raw}` };
 
-  const xmp = buf ? readXmpDate(buf) : null;
+  let xmp = null;
+  try { xmp = buf ? readXmpDate(buf) : null; } catch { xmp = null; }
   if (xmp) return { date: xmp.date, source: 'taken', detail: `XMP ${xmp.tag} ${xmp.raw}` };
 
   if (fromCamera) return { date: new Date(), source: 'camera', detail: 'Taken with the in-app camera' };
@@ -117,7 +118,21 @@ function loadImage(blob) {
   });
 }
 const toBlob = (canvas, q) => new Promise((r) => canvas.toBlob(r, 'image/jpeg', q));
-const toBuffer = async (canvas, q) => (await toBlob(canvas, q)).arrayBuffer();
+const toBuffer = async (canvas, q) => {
+  const blob = await toBlob(canvas, q);
+  if (!blob) throw new Error('The phone ran out of memory while processing a photo');
+  return readBuffer(blob);
+};
+// iPhones only allow a limited amount of canvas memory; give it back right away.
+const release = (canvas) => { canvas.width = 0; canvas.height = 0; };
+
+/** JPEG bytes -> "data:image/jpeg;base64,..." (shown directly by <img> and jsPDF). */
+export function toDataUrl(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return `data:image/jpeg;base64,${btoa(s)}`;
+}
 
 // Photos are saved as raw bytes (ArrayBuffer), not as Blobs. iPhone Safari can lose access
 // to Blobs saved in browser storage, which made thumbnails break and PDF export fail.
@@ -140,7 +155,9 @@ async function thumbFrom(source, w, h) {
   const c = document.createElement('canvas');
   c.width = Math.round(w * scale); c.height = Math.round(h * scale);
   c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
-  return toBuffer(c, 0.8);
+  const buf = await toBuffer(c, 0.8);
+  release(c);
+  return buf;
 }
 
 export function stampText(date) {
@@ -168,6 +185,7 @@ export async function processPhoto(file, date) {
   drawStamp(ctx, w, h, date);
   const jpeg = await toBuffer(canvas, 0.86);
   const thumb = await thumbFrom(canvas, w, h);
+  release(canvas);
   return { jpeg, orig, thumb, width: w, height: h };
 }
 
@@ -179,7 +197,11 @@ export async function restamp(origBuf, date) {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
   drawStamp(ctx, canvas.width, canvas.height, date);
-  return { jpeg: await toBuffer(canvas, 0.86), thumb: await thumbFrom(canvas, canvas.width, canvas.height) };
+  const w = canvas.width, h = canvas.height;
+  const jpeg = await toBuffer(canvas, 0.86);
+  const thumb = await thumbFrom(canvas, w, h);
+  release(canvas);
+  return { jpeg, thumb };
 }
 
 /** Make a thumbnail from stored JPEG bytes (used when upgrading older photos). */

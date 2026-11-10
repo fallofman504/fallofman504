@@ -1,7 +1,7 @@
 // Builds the day / week PDF report with a fixed, pretty layout,
 // so nobody has to fuss with fonts and picture placement ever again.
 import { db } from './db.js';
-import { readBuffer } from './photos.js';
+import { readBuffer, toDataUrl } from './photos.js';
 import { fmtDate, fmtTime, fmtHours, sessionHours, dayHours, parseDayId } from './util.js';
 
 const C = {
@@ -270,7 +270,7 @@ export async function buildReport(days, kind, { name = '', onProgress = () => {}
       doc.setFillColor(236, 240, 237);
       doc.roundedRect(x - 3, rowY - 3, w + 6, h + 6, 4, 4, 'F');
       try {
-        doc.addImage(p.bytes, 'JPEG', x, rowY, w, h, undefined, 'FAST');
+        doc.addImage(toDataUrl(p.bytes), 'JPEG', x, rowY, w, h, undefined, 'FAST');
       } catch (err) {
         console.error('photo skipped', err);
         skipped++;

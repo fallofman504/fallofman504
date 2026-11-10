@@ -290,3 +290,6 @@ input[type=date], input[type=datetime-local] {
   background: #fff4dc; color: #8a6200; font-size: 11px; font-weight: 700; line-height: 1.3;
 }
 .mini-grid .lost { aspect-ratio: 1; border-radius: 8px; }
+
+.app-version { text-align: center; color: #a3aca6; font-size: 10.5px; margin: 18px 0 4px; letter-spacing: .3px; }
+.splash-version { position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); left: 0; right: 0; margin: 0; }
