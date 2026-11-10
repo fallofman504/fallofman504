@@ -37,4 +37,8 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export const newDay = (id) => ({ id, sessions: [], notes: '', volunteers: [], updatedAt: Date.now() });
+/** A blank daily report. `date` is the day it belongs to; `status` is 'draft' until exported/filed. */
+export const newDay = (name = '') => ({
+  id: uid(), date: dayId(), status: 'draft', name,
+  sessions: [], notes: '', volunteers: [], createdAt: Date.now(), updatedAt: Date.now(),
+});

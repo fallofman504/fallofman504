@@ -18,7 +18,8 @@ const C = {
 // jsPDF's built-in fonts only cover Latin characters; drop emoji etc.
 const clean = (s) => (s || '')
   .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
-  .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ–—•…]/g, '');
+  .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ–—•…]/g, '')
+  .replace(/[ \t]{2,}/g, ' ');
 
 function blobToDataURL(blob) {
   return new Promise((res, rej) => {
@@ -29,14 +30,22 @@ function blobToDataURL(blob) {
   });
 }
 
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+/** Sort reports by date, then by when they were started. */
+export const byDate = (a, b) => a.date.localeCompare(b.date) || (a.createdAt || 0) - (b.createdAt || 0);
+
 /**
  * @param {Array} days  day records (any order)
  * @param {'day'|'week'} kind
- * @returns {Promise<{blob: Blob, filename: string}>}
+ * @param {{name?: string, onProgress?: (text: string) => void}} opts
+ * @returns {Promise<{blob: Blob, filename: string, pages: number}>}
  */
-export async function buildReport(days, kind) {
+export async function buildReport(days, kind, { name = '', onProgress = () => {} } = {}) {
   const { jsPDF } = window.jspdf;
-  days = [...days].sort((a, b) => a.id.localeCompare(b.id));
+  onProgress('Laying out the time sheet…');
+  await nextFrame();
+  days = [...days].sort(byDate);
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -44,8 +53,8 @@ export async function buildReport(days, kind) {
   const CW = W - M * 2;
   let y = 0;
 
-  const first = parseDayId(days[0].id);
-  const last = parseDayId(days[days.length - 1].id);
+  const first = parseDayId(days[0].date);
+  const last = parseDayId(days[days.length - 1].date);
   const range = days.length === 1
     ? fmtDate(first, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : `${fmtDate(first, { month: 'short', day: 'numeric' })} – ${fmtDate(last, { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -131,7 +140,8 @@ export async function buildReport(days, kind) {
   doc.text(range, M, 82);
   const total = days.reduce((t, d) => t + dayHours(d), 0);
   doc.setFontSize(11);
-  doc.text(`${days.length} day${days.length === 1 ? '' : 's'}  ·  ${fmtHours(total)} total`, M, 100);
+  const author = clean(name).trim();
+  doc.text(`${author ? `Prepared by ${author}  ·  ` : ''}${days.length} day${days.length === 1 ? '' : 's'}  ·  ${fmtHours(total)} total`, M, 100);
   y = 140;
 
   // ---------- time sheet ----------
@@ -143,7 +153,7 @@ export async function buildReport(days, kind) {
     const sessions = d.sessions.length ? d.sessions : [{}];
     sessions.forEach((s, i) => {
       tableRow([
-        i === 0 ? fmtDate(parseDayId(d.id), { weekday: 'short', month: 'short', day: 'numeric' }) : '',
+        i === 0 ? fmtDate(parseDayId(d.date), { weekday: 'short', month: 'short', day: 'numeric' }) : '',
         s.in ? fmtTime(s.in) : '—',
         s.out ? fmtTime(s.out) : (s.in ? 'not clocked out' : '—'),
         s.in ? fmtHours(sessionHours(s)) : '—',
@@ -166,7 +176,7 @@ export async function buildReport(days, kind) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
       doc.setTextColor(...C.rose);
-      doc.text(fmtDate(parseDayId(d.id), { weekday: 'long', month: 'long', day: 'numeric' }), M, y);
+      doc.text(fmtDate(parseDayId(d.date), { weekday: 'long', month: 'long', day: 'numeric' }), M, y);
       y += 16;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10.5);
@@ -189,7 +199,7 @@ export async function buildReport(days, kind) {
       if (!key) continue;
       const k = key.toLowerCase();
       if (!vols.has(k)) vols.set(k, { name: key, days: [] });
-      vols.get(k).days.push(parseDayId(d.id));
+      if (!vols.get(k).days.includes(d.date)) vols.get(k).days.push(d.date);
     }
   }
   if (vols.size) {
@@ -198,7 +208,7 @@ export async function buildReport(days, kind) {
     tableRow(['Name', kind === 'week' ? 'Days volunteered' : 'Date'], vw, { bold: true, fill: C.lilac, color: [255, 255, 255] });
     let z = false;
     [...vols.values()].sort((a, b) => a.name.localeCompare(b.name)).forEach((v) => {
-      const daysText = v.days.map((dt) => fmtDate(dt, { weekday: 'short', month: 'numeric', day: 'numeric' })).join(',  ');
+      const daysText = v.days.map((dt) => fmtDate(parseDayId(dt), { weekday: 'short', month: 'numeric', day: 'numeric' })).join(',  ');
       const lines = doc.splitTextToSize(daysText, vw[1] - 20);
       const h = Math.max(22, lines.length * 13 + 9);
       ensure(h);
@@ -215,8 +225,11 @@ export async function buildReport(days, kind) {
 
   // ---------- photos ----------
   const photos = [];
+  const dateOf = new Map(days.map((d) => [d.id, d.date]));
   for (const d of days) photos.push(...(await db.photosForDay(d.id)));
-  photos.sort((a, b) => a.takenAt - b.takenAt);
+  // chronological, grouped under each day in order
+  const order = new Map(days.map((d, i) => [d.id, i]));
+  photos.sort((a, b) => order.get(a.dayId) - order.get(b.dayId) || a.takenAt - b.takenAt);
   if (photos.length) {
     const gap = 14;
     const cellW = (CW - gap) / 2;
@@ -227,20 +240,23 @@ export async function buildReport(days, kind) {
       const ratio = p.height / p.width;
       let w = cellW, h = cellW * ratio;
       if (h > maxH) { h = maxH; w = h / ratio; }
-      if (p.dayId !== lastDay && kind === 'week') {
+      const pDate = dateOf.get(p.dayId);
+      if (pDate !== lastDay && kind === 'week') {
         if (col !== 0) { y = rowY + rowH + gap; col = 0; rowH = 0; }
         ensure(20 + maxH); // keep the day label with its first photos
         doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...C.leafDark);
-        doc.text(fmtDate(parseDayId(p.dayId), { weekday: 'long', month: 'long', day: 'numeric' }), M, y + 4);
+        doc.text(fmtDate(parseDayId(pDate), { weekday: 'long', month: 'long', day: 'numeric' }), M, y + 4);
         y += 16;
         rowY = y;
-        lastDay = p.dayId;
+        lastDay = pDate;
       }
       if (col === 0) {
         if (y + maxH > H - 50) newPage();
         rowY = y; rowH = 0;
       }
       const x = M + col * (cellW + gap) + (cellW - w) / 2;
+      onProgress(`Adding photo ${photos.indexOf(p) + 1} of ${photos.length}…`);
+      await nextFrame();
       const data = await blobToDataURL(p.blob);
       doc.setFillColor(236, 240, 237);
       doc.roundedRect(x - 3, rowY - 3, w + 6, h + 6, 4, 4, 'F');
@@ -252,9 +268,12 @@ export async function buildReport(days, kind) {
     if (col !== 0) y = rowY + rowH + gap;
   }
 
+  onProgress('Finishing up…');
+  await nextFrame();
   footer();
-  const stamp = days.length === 1 ? days[0].id : `${days[0].id}_to_${days[days.length - 1].id}`;
+  const stamp = days.length === 1 ? days[0].date : `${days[0].date}_to_${days[days.length - 1].date}`;
   return {
+    pages: doc.internal.getNumberOfPages(),
     blob: doc.output('blob'),
     filename: `Garden-${kind === 'week' ? 'Week' : 'Day'}-Report_${stamp}.pdf`,
   };
