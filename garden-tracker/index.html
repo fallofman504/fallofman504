@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Garden Tracker</title>
+  <meta name="theme-color" content="#3d7a52">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Garden Tracker">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Floral loading screen -->
+  <div id="splash" aria-hidden="true">
+    <div class="bloom-field">
+      <span class="bloom b1"></span><span class="bloom b2"></span><span class="bloom b3"></span>
+      <span class="bloom b4"></span><span class="bloom b5"></span><span class="bloom b6"></span>
+      <span class="bloom b7"></span>
+    </div>
+    <div class="splash-title">Garden Tracker</div>
+    <div class="vine"></div>
+  </div>
+
+  <main>
+    <!-- TODAY -->
+    <section id="view-today" class="view active">
+      <header class="hero">
+        <div class="hero-flowers" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h1>Garden Tracker</h1>
+        <p id="today-date" class="sub"></p>
+      </header>
+
+      <div id="editing-banner" class="banner" hidden>
+        <span>Editing <b id="editing-date"></b></span>
+        <button class="link" id="back-to-today">Back to today</button>
+      </div>
+
+      <div class="card clock-card">
+        <button id="clock-btn" class="clock-btn in">
+          <span class="clock-label">Clock In</span>
+          <span class="clock-sub" id="clock-sub">Tap when you arrive</span>
+        </button>
+        <div id="shifts" class="shifts"></div>
+        <button class="link small" id="add-shift">+ Add a shift by hand</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2><span class="dot rose"></span>Photos</h2>
+          <span class="count" id="photo-count"></span>
+        </div>
+        <label class="upload">
+          <input type="file" id="photo-input" accept="image/*" multiple hidden>
+          <span>＋ Add today's photos</span>
+        </label>
+        <p class="hint">Each photo is stamped with the date &amp; time it was taken.</p>
+        <div id="photo-progress" class="progress" hidden></div>
+        <div id="photo-grid" class="photo-grid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2><span class="dot lilac"></span>Reflection Notes</h2><span class="saved" id="notes-saved"></span></div>
+        <textarea id="notes" rows="5" placeholder="What happened in the garden today?"></textarea>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2><span class="dot sun"></span>Volunteers</h2></div>
+        <form id="vol-form" class="vol-form">
+          <input id="vol-input" type="text" placeholder="Volunteer name" autocomplete="off" autocapitalize="words">
+          <button type="submit" class="btn small">Add</button>
+        </form>
+        <div id="vol-list" class="chips"></div>
+        <div id="vol-suggest-wrap" hidden>
+          <p class="hint">Recent volunteers — tap to add:</p>
+          <div id="vol-suggest" class="chips suggest"></div>
+        </div>
+      </div>
+
+      <button id="export-day" class="btn big export">Export Day Report</button>
+      <div class="spacer"></div>
+    </section>
+
+    <!-- DAILY REPORTS -->
+    <section id="view-days" class="view">
+      <header class="page-head">
+        <h1>Daily Reports</h1>
+        <button id="select-btn" class="btn ghost small">Select</button>
+      </header>
+      <p class="hint pad" id="select-hint" hidden>Tap the days to include in this week's report.</p>
+      <div id="day-list" class="list"></div>
+      <div class="spacer"></div>
+      <div id="select-bar" class="select-bar" hidden>
+        <button id="export-week" class="btn big export" disabled>Export Week</button>
+      </div>
+    </section>
+
+    <!-- WEEKLY REPORTS -->
+    <section id="view-weeks" class="view">
+      <header class="page-head"><h1>Weekly Reports</h1></header>
+      <div id="week-list" class="list"></div>
+      <div class="spacer"></div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-view="view-today" class="tab active"><span class="ti">✿</span>Today</button>
+    <button data-view="view-days" class="tab"><span class="ti">❀</span>Daily Reports</button>
+    <button data-view="view-weeks" class="tab"><span class="ti">❁</span>Weekly Reports</button>
+  </nav>
+
+  <!-- bottom sheet used for details / editing -->
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+  <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"><div class="sheet-grip"></div><div id="sheet-body"></div></div>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="busy" class="busy" hidden><div class="spinner"></div><p id="busy-text">Building your report…</p></div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
