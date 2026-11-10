@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached so it opens even with no signal at the garden.
 // Bump VERSION whenever the app files change so phones pick up the update.
-const VERSION = 'gt-v2';
+const VERSION = 'gt-v3';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/db.js', 'js/photos.js', 'js/report.js', 'js/util.js',
