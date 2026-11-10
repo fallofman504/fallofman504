@@ -1,5 +1,6 @@
 import { db, requestPersistence } from './db.js';
-import { readTakenDate, processPhoto, restamp, stampText, SOURCE_TEXT, jpegBlob, readBuffer, makeThumb } from './photos.js';
+import { readTakenDate, processPhoto, restamp, stampText, SOURCE_TEXT, readBuffer, makeThumb, toDataUrl } from './photos.js';
+import { APP_VERSION } from './version.js';
 import { buildReport, shareOrDownload, byDate } from './report.js';
 import {
   dayId, parseDayId, fmtDate, fmtTime, fmtHours, fmtElapsed, sessionHours, dayHours,
@@ -17,12 +18,10 @@ const state = {
   selecting: false,
   selected: new Set(),
 };
-const urls = new Set();
-const blobUrl = (blob) => { const u = URL.createObjectURL(blob); urls.add(u); return u; };
-const freeUrls = () => { urls.forEach((u) => URL.revokeObjectURL(u)); urls.clear(); };
-// Photos are stored as raw JPEG bytes; these turn them into something an <img> can show.
-const thumbUrl = (p) => blobUrl(jpegBlob(p.thumb || p.jpeg));
-const fullUrl = (p) => blobUrl(jpegBlob(p.jpeg));
+// Photos are stored as raw JPEG bytes and shown as data: URLs. (Temporary blob: links
+// were breaking into "?" icons on iPhone.)
+const thumbUrl = (p) => toDataUrl(p.thumb || p.jpeg);
+const fullUrl = (p) => toDataUrl(p.jpeg);
 const LOST = '<div class="lost">⚠<br>Photo lost<br>please re-add</div>';
 const photoImg = (p, cls = '') => (p.broken ? LOST : `<img ${cls ? `class="${cls}"` : ''} src="${thumbUrl(p)}" alt="">`);
 
@@ -101,6 +100,27 @@ async function migrate() {
   try { localStorage.removeItem('gt-active-day'); } catch { /* ignore */ }
 }
 
+// ---------------------------------------------------------------- errors
+// Anything that goes wrong shows a card with the details, so a screenshot says exactly what broke.
+let lastStep = '';
+function showError(where, err) {
+  console.error(where, err);
+  $('#busy').hidden = true;
+  const msg = (err && (err.message || err.name)) || String(err);
+  const stack = (err && err.stack ? String(err.stack) : '').split('\n').slice(0, 4).join('\n');
+  const body = openSheet(`
+    <h3>😕 Something went wrong</h3>
+    <p class="sub">While ${esc(where)}. Please take a screenshot of this card and send it to Claude.</p>
+    <div class="src-note warn"><b>${esc(msg)}</b>
+      <p class="src-raw">${esc(APP_VERSION)} · step: ${esc(lastStep || 'n/a')}</p>
+      <p class="src-raw">${esc(stack)}</p>
+      <p class="src-raw">${esc(navigator.userAgent)}</p></div>
+    <button class="btn big ghost" id="err-close">Close</button>`);
+  body.querySelector('#err-close').onclick = closeSheet;
+}
+window.addEventListener('error', (e) => showError('running the app', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => showError('running the app', e.reason));
+
 // ---------------------------------------------------------------- ui helpers
 function toast(msg, ms = 2800) {
   const t = $('#toast');
@@ -152,13 +172,14 @@ async function exportReport(days, kind, { onDone } = {}) {
   let report;
   try {
     report = await withBusy(kind === 'week' ? 'Building your week report…' : 'Building your day report…',
-      (progress) => buildReport(days, kind, { name: getName(), onProgress: progress }));
+      (progress) => buildReport(days, kind, { name: getName(), onProgress: (t) => { lastStep = t; progress(t); } }));
   } catch (err) {
-    console.error(err);
-    toast(`Sorry, the report could not be built (${err?.message || err}). Please send Claude a screenshot of this.`, 8000);
+    showError('building the PDF', err);
     return false;
   }
-  if (onDone) await onDone();
+  if (onDone) {
+    try { await onDone(); } catch (err) { showError('saving the report', err); return false; }
+  }
   const sizeMb = (report.blob.size / 1048576).toFixed(1);
   const body = openSheet(`
     <div class="ready">
@@ -172,14 +193,13 @@ async function exportReport(days, kind, { onDone } = {}) {
     <button class="btn big ghost" id="rd-done">Done</button>
     <p class="hint" style="text-align:center">Tip: in the share menu choose <b>Save to Files</b>, Mail or Messages.</p>
   `);
-  body.querySelector('#rd-share').onclick = () => shareOrDownload(report);
+  body.querySelector('#rd-share').onclick = () => shareOrDownload(report).catch((err) => showError('opening the share menu', err));
   body.querySelector('#rd-done').onclick = closeSheet;
   return true;
 }
 
 // ================================================================ TODAY
 async function renderToday() {
-  freeUrls();
   if (state.mode === 'today') state.day = await loadDraft();
   else state.day = (await db.get('days', state.day.id)) || state.day;
   const d = state.day;
@@ -318,7 +338,7 @@ async function addPhotos(files, fromCamera) {
   const d = state.day;
   const prog = $('#photo-progress');
   prog.hidden = false;
-  let ok = 0, failed = 0, unsure = 0;
+  let ok = 0, failed = 0, unsure = 0, lastPhotoError = null;
   const otherDays = new Set();
   for (let i = 0; i < files.length; i++) {
     prog.textContent = `Stamping photo ${i + 1} of ${files.length}…`;
@@ -333,7 +353,7 @@ async function addPhotos(files, fromCamera) {
       if (source === 'file' || source === 'modified') unsure++;
       else if (dayId(date) !== d.date) otherDays.add(fmtDate(date, { month: 'short', day: 'numeric' }));
     } catch (err) {
-      console.error(err); failed++;
+      console.error(err); failed++; lastPhotoError = err;
     }
   }
   prog.hidden = true;
@@ -341,7 +361,7 @@ async function addPhotos(files, fromCamera) {
   await renderPhotos();
   if (unsure) toast(`${unsure} photo${unsure > 1 ? 's' : ''} had no "date taken". Tap the ones marked "check time" to fix.`, 5000);
   else if (otherDays.size) toast(`Heads up: ${otherDays.size === 1 ? 'some photos were' : 'photos were'} taken on ${[...otherDays].join(', ')}, not this day.`, 5000);
-  else if (failed) toast(`Added ${ok}, ${failed} couldn't be opened`);
+  else if (failed) showError(`adding photos (${ok} added, ${failed} failed)`, lastPhotoError);
   else toast(`Added ${ok} photo${ok > 1 ? 's' : ''} 🌸`);
 }
 $('#photo-input').addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; addPhotos(f, false); });
@@ -476,6 +496,7 @@ $('#export-day').addEventListener('click', async () => {
     open.out = Date.now();
   }
   btn.classList.add('working'); btn.textContent = 'Exporting…';
+  lastStep = 'saving the day';
   try {
     await saveDay(d);
     await exportReport([d], 'day', {
@@ -490,6 +511,8 @@ $('#export-day').addEventListener('click', async () => {
         toast('Saved to Daily Reports ✓  The form is ready for next time.', 3500);
       },
     });
+  } catch (err) {
+    showError('exporting the day', err);
   } finally {
     btn.classList.remove('working'); btn.textContent = 'Export Day Report';
   }
@@ -536,7 +559,6 @@ async function savedDays() {
 }
 
 async function renderDays() {
-  freeUrls();
   const items = await savedDays();
   $('#select-btn').textContent = state.selecting ? 'Cancel' : 'Select';
   $('#select-btn').hidden = !items.length;
@@ -677,6 +699,7 @@ $('#week-list').addEventListener('click', async (e) => {
 
 // ================================================================ boot
 async function boot() {
+  document.querySelectorAll('.app-version').forEach((el) => { el.textContent = `Garden Tracker ${APP_VERSION}`; });
   requestPersistence();
   await migrate();
   await renderToday();
@@ -690,6 +713,20 @@ document.addEventListener('visibilitychange', () => {
 });
 boot();
 
+// Offline support + automatic updates: when a new version is published, the new service
+// worker takes over and the page reloads once so the phone runs the latest code.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        reg.update().catch(() => {});
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+      })
+      .catch(() => {});
+  });
 }

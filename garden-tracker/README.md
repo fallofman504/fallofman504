@@ -30,7 +30,8 @@ It then opens full-screen from its own icon, like a regular app.
 
 - Data lives only on that phone, in that browser. If she deletes the app from the home screen, or clears Safari website data, her saved days are erased. Export the week PDFs (they are the real record) and keep them somewhere safe.
 - On iPhone, use the home-screen icon rather than a Safari tab. iOS can clear data for websites that aren't opened for a few weeks, but installed home-screen apps are exempt.
-- When you change the app's files, bump `VERSION` in `sw.js` so phones pick up the update.
+- The version number (e.g. "Garden Tracker v4") is shown in small print at the bottom of the Today and Weekly Reports screens. With every update, bump `APP_VERSION` in `js/version.js`, `VERSION` in `sw.js`, and the `?v=` number on `js/app.js` in `index.html` and `sw.js`.
+- If something fails, the app shows a "Something went wrong" card with the details. A screenshot of it is all that's needed to diagnose the problem.
 
 ## Running locally
 
