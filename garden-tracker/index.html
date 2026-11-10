@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Garden Tracker</title>
   <meta name="theme-color" content="#3d7a52">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -35,9 +35,17 @@
         <p id="today-date" class="sub"></p>
       </header>
 
+      <label class="name-field">
+        <span>Your name</span>
+        <input id="name-input" type="text" autocomplete="name" autocapitalize="words" placeholder="Nicky">
+      </label>
+
       <div id="editing-banner" class="banner" hidden>
-        <span>Editing <b id="editing-date"></b></span>
-        <button class="link" id="back-to-today">Back to today</button>
+        <div class="banner-row">
+          <span>✎ Editing a saved day</span>
+          <button class="btn small" id="done-edit-top">Done</button>
+        </div>
+        <label class="field">Date of this report<input type="date" id="edit-date"></label>
       </div>
 
       <div class="card clock-card">
@@ -54,11 +62,17 @@
           <h2><span class="dot rose"></span>Photos</h2>
           <span class="count" id="photo-count"></span>
         </div>
-        <label class="upload">
-          <input type="file" id="photo-input" accept="image/*" multiple hidden>
-          <span>＋ Add today's photos</span>
-        </label>
-        <p class="hint">Each photo is stamped with the date &amp; time it was taken.</p>
+        <div class="upload-row">
+          <label class="upload">
+            <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+            <span>📷 Take Photo</span>
+          </label>
+          <label class="upload">
+            <input type="file" id="photo-input" accept="image/*" multiple hidden>
+            <span>🖼 Choose Photos</span>
+          </label>
+        </div>
+        <p class="hint">Each photo is stamped with the date &amp; time it was taken. Tap a photo to check or fix its time.</p>
         <div id="photo-progress" class="progress" hidden></div>
         <div id="photo-grid" class="photo-grid"></div>
       </div>
@@ -82,6 +96,10 @@
       </div>
 
       <button id="export-day" class="btn big export">Export Day Report</button>
+      <div id="edit-actions" hidden>
+        <button id="done-edit" class="btn big">✓ Done Editing</button>
+        <button id="edit-export" class="btn big ghost">Export this day again</button>
+      </div>
       <div class="spacer"></div>
     </section>
 
@@ -118,7 +136,11 @@
   <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"><div class="sheet-grip"></div><div id="sheet-body"></div></div>
 
   <div id="toast" class="toast" hidden></div>
-  <div id="busy" class="busy" hidden><div class="spinner"></div><p id="busy-text">Building your report…</p></div>
+  <div id="busy" class="busy" hidden>
+    <div class="spinner"></div>
+    <p id="busy-title">Building your report…</p>
+    <p id="busy-text" class="busy-sub"></p>
+  </div>
 
   <script src="vendor/jspdf.umd.min.js"></script>
   <script type="module" src="js/app.js"></script>

@@ -1,43 +1,102 @@
 import { db, requestPersistence } from './db.js';
-import { readTakenDate, stampPhoto } from './photos.js';
-import { buildReport, shareOrDownload } from './report.js';
+import { readTakenDate, processPhoto, restamp, stampText, SOURCE_TEXT } from './photos.js';
+import { buildReport, shareOrDownload, byDate } from './report.js';
 import {
   dayId, parseDayId, fmtDate, fmtTime, fmtHours, fmtElapsed, sessionHours, dayHours,
-  toTimeInput, fromTimeInput, uid, esc, newDay,
+  toTimeInput, fromTimeInput, uid, esc, newDay, pad,
 } from './util.js';
 
 const $ = (s) => document.querySelector(s);
-const ACTIVE_KEY = 'gt-active-day'; // day id holding an open (not clocked out) shift
+const DRAFT_KEY = 'gt-draft';   // id of the report being filled in on the Today screen
+const NAME_KEY = 'gt-name';
+const DEFAULT_NAME = 'Nicky';
 
 const state = {
-  editingId: dayId(), // which day the Today screen is editing
-  day: null,
+  mode: 'today',   // 'today' = filling in the current report, 'edit' = fixing a saved one
+  day: null,       // the report shown on the Today screen
   selecting: false,
   selected: new Set(),
 };
-const urls = new Set(); // object URLs to clean up between renders
+const urls = new Set();
 const blobUrl = (blob) => { const u = URL.createObjectURL(blob); urls.add(u); return u; };
 const freeUrls = () => { urls.forEach((u) => URL.revokeObjectURL(u)); urls.clear(); };
 
+const getName = () => { try { return localStorage.getItem(NAME_KEY) ?? DEFAULT_NAME; } catch { return DEFAULT_NAME; } };
+const setName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch { /* ignore */ } };
+const getDraftId = () => { try { return localStorage.getItem(DRAFT_KEY); } catch { return null; } };
+const setDraftId = (id) => { try { localStorage.setItem(DRAFT_KEY, id); } catch { /* ignore */ } };
+
 // ---------------------------------------------------------------- data
-async function loadDay(id) { return (await db.get('days', id)) || newDay(id); }
-async function saveDay(day) { day.updatedAt = Date.now(); await db.put('days', day); }
-const isEmpty = (d) => !d.sessions.length && !d.notes.trim() && !d.volunteers.length;
+const hasContent = (d, photoCount = 0) => d.sessions.length || d.notes.trim() || d.volunteers.length || photoCount;
+const openShift = (d) => d.sessions.find((s) => s.in && !s.out);
+
+async function saveDay(day) {
+  day.updatedAt = Date.now();
+  if (day.status === 'draft') day.name = getName();
+  await db.put('days', day);
+}
+
+/** The report the Today screen fills in. Creates a fresh blank one when needed. */
+async function loadDraft() {
+  const id = getDraftId();
+  let d = id && (await db.get('days', id));
+  if (d && d.status !== 'draft') d = null;
+  if (d && d.date < dayId() && !openShift(d)) {
+    const photos = await db.photosForDay(d.id);
+    if (hasContent(d, photos.length)) {
+      // An earlier day was never exported: file it under Daily Reports and start fresh.
+      d.status = 'done';
+      await saveDay(d);
+      setTimeout(() => toast(`${fmtDate(parseDayId(d.date), { weekday: 'long' })}'s entry was saved to Daily Reports 🌿`), 2300);
+    } else {
+      d.date = dayId(); // empty draft from an earlier day: just reuse it
+      return d;
+    }
+    d = null;
+  }
+  if (!d) {
+    d = newDay(getName());
+    setDraftId(d.id);
+  }
+  return d;
+}
+
+/** Older versions keyed reports by date; give them the new fields. */
+async function migrate() {
+  for (const d of await db.all('days')) {
+    if (!d.date) {
+      d.date = d.id; d.status = 'done'; d.createdAt = d.createdAt || d.updatedAt || Date.now();
+      await db.put('days', d);
+    }
+  }
+  try { localStorage.removeItem('gt-active-day'); } catch { /* ignore */ }
+}
 
 // ---------------------------------------------------------------- ui helpers
-function toast(msg) {
+function toast(msg, ms = 2800) {
   const t = $('#toast');
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { t.hidden = true; }, 2600);
+  toast.timer = setTimeout(() => { t.hidden = true; }, ms);
 }
-async function busy(text, fn) {
-  $('#busy-text').textContent = text; $('#busy').hidden = false;
-  try { return await fn(); } finally { $('#busy').hidden = true; }
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+async function withBusy(title, fn) {
+  $('#busy-title').textContent = title;
+  $('#busy-text').textContent = '';
+  $('#busy').hidden = false;
+  await nextFrame();
+  try {
+    return await fn((text) => { $('#busy-text').textContent = text; });
+  } finally {
+    $('#busy').hidden = true;
+  }
 }
+
 function openSheet(html) {
   $('#sheet-body').innerHTML = html;
   $('#sheet').hidden = false; $('#sheet-backdrop').hidden = false;
+  $('#sheet').scrollTop = 0;
   return $('#sheet-body');
 }
 function closeSheet() { $('#sheet').hidden = true; $('#sheet-backdrop').hidden = true; }
@@ -51,38 +110,87 @@ function showView(id) {
   if (id === 'view-weeks') renderWeeks();
   if (id === 'view-today') renderToday();
 }
-document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', async () => {
+  if (state.mode === 'edit') await finishEditing(); // leaving the editor keeps the changes
+  showView(t.dataset.view);
+}));
+
+/**
+ * Build a PDF with a progress spinner, then show a "ready" card. The Share button there is a
+ * fresh tap, which iPhones require before they will open the share sheet.
+ */
+async function exportReport(days, kind, { onDone } = {}) {
+  let report;
+  try {
+    report = await withBusy(kind === 'week' ? 'Building your week report…' : 'Building your day report…',
+      (progress) => buildReport(days, kind, { name: getName(), onProgress: progress }));
+  } catch (err) {
+    console.error(err);
+    toast('Sorry, the report could not be built. Please try again.');
+    return false;
+  }
+  if (onDone) await onDone();
+  const sizeMb = (report.blob.size / 1048576).toFixed(1);
+  const body = openSheet(`
+    <div class="ready">
+      <div class="ready-icon">${kind === 'week' ? '🌻' : '🌷'}</div>
+      <h3>${kind === 'week' ? 'Week' : 'Day'} report is ready!</h3>
+      <div class="file">📄 ${esc(report.filename)}</div>
+      <p class="sub">${report.pages} page${report.pages > 1 ? 's' : ''} · ${sizeMb} MB</p>
+    </div>
+    <button class="btn big export" id="rd-share">Share / Save PDF</button>
+    <button class="btn big ghost" id="rd-done">Done</button>
+    <p class="hint" style="text-align:center">Tip: in the share menu choose <b>Save to Files</b>, Mail or Messages.</p>
+  `);
+  body.querySelector('#rd-share').onclick = () => shareOrDownload(report);
+  body.querySelector('#rd-done').onclick = closeSheet;
+  return true;
+}
 
 // ================================================================ TODAY
 async function renderToday() {
   freeUrls();
-  state.day = await loadDay(state.editingId);
+  if (state.mode === 'today') state.day = await loadDraft();
+  else state.day = (await db.get('days', state.day.id)) || state.day;
   const d = state.day;
-  const isToday = d.id === dayId();
+  const editing = state.mode === 'edit';
+
   $('#today-date').textContent = fmtDate(new Date());
-  $('#editing-banner').hidden = isToday;
-  $('#editing-date').textContent = fmtDate(parseDayId(d.id), { weekday: 'short', month: 'short', day: 'numeric' });
-  $('#clock-btn').hidden = !isToday && !openShift(d); // clock in only for today, but always allow clocking out
-  state.todayAtRender = dayId();
-  renderClock();
+  if (document.activeElement !== $('#name-input')) $('#name-input').value = getName();
+  $('#editing-banner').hidden = !editing;
+  $('#edit-date').value = d.date;
+  $('#export-day').hidden = editing;
+  $('#edit-actions').hidden = !editing;
+  $('#export-day').textContent = 'Export Day Report';
   if (document.activeElement !== $('#notes')) $('#notes').value = d.notes;
   $('#notes-saved').textContent = '';
+  renderClock();
   renderVolunteers();
   await renderPhotos();
 }
 
-// ---------- clock ----------
-function openShift(d) { return d.sessions.find((s) => s.in && !s.out); }
+// ---------- name ----------
+$('#name-input').addEventListener('input', async (e) => {
+  setName(e.target.value.trim());
+  if (state.mode === 'today' && state.day && getDraftId() === state.day.id && (await db.get('days', state.day.id))) {
+    await saveDay(state.day);
+  }
+});
+$('#name-input').addEventListener('blur', (e) => {
+  if (!e.target.value.trim()) { e.target.value = DEFAULT_NAME; setName(DEFAULT_NAME); }
+});
 
+// ---------- clock ----------
 function renderClock() {
   const d = state.day;
   const btn = $('#clock-btn');
   const open = openShift(d);
+  // Clock in only works on today's report; a saved day can still be clocked out of.
+  btn.hidden = state.mode === 'edit' && !open;
   btn.classList.toggle('out', !!open);
   btn.classList.toggle('in', !open);
   btn.querySelector('.clock-label').textContent = open ? 'Clock Out' : 'Clock In';
   tick();
-
   const rows = d.sessions.map((s, i) => `
     <div class="shift">
       <span>${fmtTime(s.in)} – ${s.out ? fmtTime(s.out) : '<i>now</i>'}</span>
@@ -94,10 +202,12 @@ function renderClock() {
 }
 
 function tick() {
-  const open = state.day && openShift(state.day);
+  const d = state.day;
+  if (!d) return;
+  const open = openShift(d);
   const sub = $('#clock-sub');
   if (open) sub.textContent = `On the clock · ${fmtElapsed(Date.now() - open.in)}`;
-  else if (state.day?.sessions.length) sub.textContent = `${fmtHours(dayHours(state.day))} logged today`;
+  else if (d.sessions.length) sub.textContent = `${fmtHours(dayHours(d))} logged`;
   else sub.textContent = 'Tap when you arrive';
 }
 setInterval(tick, 1000);
@@ -107,11 +217,10 @@ $('#clock-btn').addEventListener('click', async () => {
   const open = openShift(d);
   if (open) {
     open.out = Date.now();
-    localStorage.removeItem(ACTIVE_KEY);
-    toast(`Clocked out — ${fmtHours(sessionHours(open))} today. Nice work! 🌷`);
+    toast(`Clocked out: ${fmtHours(sessionHours(open))}. Nice work! 🌷`);
   } else {
+    if (!d.sessions.length) d.date = dayId();
     d.sessions.push({ in: Date.now(), out: null });
-    localStorage.setItem(ACTIVE_KEY, d.id);
     toast('Clocked in. Have a lovely shift! 🌼');
   }
   await saveDay(d);
@@ -120,32 +229,33 @@ $('#clock-btn').addEventListener('click', async () => {
 
 function shiftEditor(index) {
   const d = state.day;
-  const s = index == null ? { in: fromTimeInput(d.id, '09:00'), out: fromTimeInput(d.id, '12:00') } : d.sessions[index];
+  const s = index == null ? { in: fromTimeInput(d.date, '09:00'), out: fromTimeInput(d.date, '12:00') } : d.sessions[index];
   const body = openSheet(`
     <h3>${index == null ? 'Add a shift' : 'Edit shift'}</h3>
-    <p class="sub">${fmtDate(parseDayId(d.id))}</p>
+    <p class="sub">${fmtDate(parseDayId(d.date))}</p>
     <label class="field">Clock in<input type="time" id="sh-in" value="${toTimeInput(s.in)}"></label>
     <label class="field">Clock out<input type="time" id="sh-out" value="${s.out ? toTimeInput(s.out) : ''}"></label>
     <button class="btn big" id="sh-save">Save</button>
     ${index == null ? '' : '<button class="btn big danger" id="sh-del">Delete shift</button>'}
+    <button class="btn big ghost" id="sh-cancel">Cancel</button>
   `);
   body.querySelector('#sh-save').onclick = async () => {
     const inV = body.querySelector('#sh-in').value;
     const outV = body.querySelector('#sh-out').value;
     if (!inV) return toast('Please enter a clock-in time');
-    const next = { in: fromTimeInput(d.id, inV), out: outV ? fromTimeInput(d.id, outV) : null };
+    const next = { in: fromTimeInput(d.date, inV), out: outV ? fromTimeInput(d.date, outV) : null };
     if (next.out && next.out < next.in) next.out += 864e5; // shift past midnight
     if (index == null) d.sessions.push(next); else d.sessions[index] = next;
     d.sessions.sort((a, b) => a.in - b.in);
-    if (!openShift(d) && localStorage.getItem(ACTIVE_KEY) === d.id) localStorage.removeItem(ACTIVE_KEY);
     await saveDay(d); closeSheet(); renderClock();
+    toast('Shift saved ✓');
   };
   const del = body.querySelector('#sh-del');
   if (del) del.onclick = async () => {
     d.sessions.splice(index, 1);
-    if (!openShift(d) && localStorage.getItem(ACTIVE_KEY) === d.id) localStorage.removeItem(ACTIVE_KEY);
     await saveDay(d); closeSheet(); renderClock();
   };
+  body.querySelector('#sh-cancel').onclick = closeSheet;
 }
 $('#shifts').addEventListener('click', (e) => {
   const b = e.target.closest('[data-edit-shift]');
@@ -154,69 +264,129 @@ $('#shifts').addEventListener('click', (e) => {
 $('#add-shift').addEventListener('click', () => shiftEditor(null));
 
 // ---------- photos ----------
+const needsCheck = (p) => p.dateSource === 'file' || p.dateSource === 'modified';
+
 async function renderPhotos() {
-  const photos = (await db.photosForDay(state.day.id)).sort((a, b) => a.takenAt - b.takenAt);
+  const d = state.day;
+  const photos = (await db.photosForDay(d.id)).sort((a, b) => a.takenAt - b.takenAt);
   $('#photo-count').textContent = photos.length ? `${photos.length} photo${photos.length > 1 ? 's' : ''}` : '';
-  $('#photo-grid').innerHTML = photos.map((p) => `
-    <div class="photo">
+  $('#photo-grid').innerHTML = photos.map((p) => {
+    const otherDay = dayId(new Date(p.takenAt)) !== d.date;
+    let badge = '';
+    if (needsCheck(p)) badge = '<span class="warn">check time</span>';
+    else if (otherDay) badge = `<span class="warn">${fmtDate(p.takenAt, { month: 'short', day: 'numeric' })}</span>`;
+    return `<div class="photo" data-photo="${p.id}">
       <img src="${blobUrl(p.blob)}" alt="">
-      ${p.dateSource === 'file' ? '<span class="warn" title="No camera date found; used the file date">file date</span>' : ''}
+      ${badge}
       <button class="del" data-del-photo="${p.id}" aria-label="Remove photo">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
-$('#photo-input').addEventListener('change', async (e) => {
-  const files = [...e.target.files];
-  e.target.value = '';
+async function addPhotos(files, fromCamera) {
   if (!files.length) return;
+  const d = state.day;
   const prog = $('#photo-progress');
   prog.hidden = false;
-  let ok = 0, failed = 0;
+  let ok = 0, failed = 0, unsure = 0;
+  const otherDays = new Set();
   for (let i = 0; i < files.length; i++) {
     prog.textContent = `Stamping photo ${i + 1} of ${files.length}…`;
     try {
-      const { date, source } = await readTakenDate(files[i]);
-      const { blob, width, height } = await stampPhoto(files[i], date);
+      const { date, source, detail } = await readTakenDate(files[i], { fromCamera });
+      const { orig, blob, width, height } = await processPhoto(files[i], date);
       await db.put('photos', {
-        id: uid(), dayId: state.day.id, takenAt: date.getTime(), dateSource: source, blob, width, height,
+        id: uid(), dayId: d.id, takenAt: date.getTime(), dateSource: source, dateDetail: detail,
+        blob, orig, width, height,
       });
       ok++;
+      if (source === 'file' || source === 'modified') unsure++;
+      else if (dayId(date) !== d.date) otherDays.add(fmtDate(date, { month: 'short', day: 'numeric' }));
     } catch (err) {
       console.error(err); failed++;
     }
   }
   prog.hidden = true;
-  if (ok) await saveDay(state.day); // make sure the day shows up in Daily Reports
-  toast(failed ? `Added ${ok}, ${failed} couldn't be opened` : `Added ${ok} photo${ok > 1 ? 's' : ''} 🌸`);
-  renderPhotos();
-});
+  if (ok) await saveDay(d);
+  await renderPhotos();
+  if (unsure) toast(`${unsure} photo${unsure > 1 ? 's' : ''} had no "date taken". Tap the ones marked "check time" to fix.`, 5000);
+  else if (otherDays.size) toast(`Heads up: ${otherDays.size === 1 ? 'some photos were' : 'photos were'} taken on ${[...otherDays].join(', ')}, not this day.`, 5000);
+  else if (failed) toast(`Added ${ok}, ${failed} couldn't be opened`);
+  else toast(`Added ${ok} photo${ok > 1 ? 's' : ''} 🌸`);
+}
+$('#photo-input').addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; addPhotos(f, false); });
+$('#camera-input').addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; addPhotos(f, true); });
 
 $('#photo-grid').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-del-photo]');
-  if (!b || !confirm('Remove this photo?')) return;
-  await db.del('photos', b.dataset.delPhoto);
-  renderPhotos();
+  const del = e.target.closest('[data-del-photo]');
+  if (del) {
+    if (confirm('Remove this photo?')) { await db.del('photos', del.dataset.delPhoto); renderPhotos(); }
+    return;
+  }
+  const tile = e.target.closest('[data-photo]');
+  if (tile) photoSheet(tile.dataset.photo);
 });
 
+const toLocalInput = (ms) => { const d = new Date(ms); return `${dayId(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+async function photoSheet(id) {
+  const p = await db.get('photos', id);
+  if (!p) return;
+  const warn = needsCheck(p);
+  const body = openSheet(`
+    <img class="photo-big" src="${blobUrl(p.blob)}" alt="">
+    <h3>${esc(stampText(new Date(p.takenAt)))}</h3>
+    <div class="src-note ${warn ? 'warn' : ''}">${esc(SOURCE_TEXT[p.dateSource] || 'This photo was added before the time checker existed.')}
+      ${p.dateDetail ? `<p class="src-raw">${esc(p.dateDetail)}</p>` : ''}</div>
+    ${p.orig ? `
+      <label class="field">Fix the date &amp; time<input type="datetime-local" id="ph-when" value="${toLocalInput(p.takenAt)}"></label>
+      <button class="btn big" id="ph-save">Update stamp</button>`
+    : '<p class="hint">To change this photo\'s time, remove it and add it again.</p>'}
+    <button class="btn big danger" id="ph-del">Remove photo</button>
+    <button class="btn big ghost" id="ph-close">Close</button>
+  `);
+  const save = body.querySelector('#ph-save');
+  if (save) save.onclick = async () => {
+    const v = body.querySelector('#ph-when').value;
+    if (!v) return toast('Please pick a date and time');
+    const [date, time] = v.split('T');
+    const when = new Date(fromTimeInput(date, time.slice(0, 5)));
+    save.classList.add('working');
+    p.blob = await restamp(p.orig, when);
+    p.takenAt = when.getTime();
+    p.dateSource = 'manual';
+    p.dateDetail = 'Time set by hand';
+    await db.put('photos', p);
+    closeSheet(); renderPhotos();
+    toast('Stamp updated ✓');
+  };
+  body.querySelector('#ph-del').onclick = async () => {
+    if (!confirm('Remove this photo?')) return;
+    await db.del('photos', p.id); closeSheet(); renderPhotos();
+  };
+  body.querySelector('#ph-close').onclick = closeSheet;
+}
+
 // ---------- notes (autosave) ----------
-let notesTimer;
+let notesTimer = null;
 $('#notes').addEventListener('input', () => {
   $('#notes-saved').textContent = 'Saving…';
   clearTimeout(notesTimer);
-  notesTimer = setTimeout(async () => {
-    state.day.notes = $('#notes').value;
-    await saveDay(state.day);
-    $('#notes-saved').textContent = 'Saved ✓';
-  }, 500);
+  notesTimer = setTimeout(flushNotes, 500);
 });
+async function flushNotes() {
+  if (notesTimer == null) return;
+  clearTimeout(notesTimer); notesTimer = null;
+  state.day.notes = $('#notes').value;
+  await saveDay(state.day);
+  $('#notes-saved').textContent = 'Saved ✓';
+}
 
 // ---------- volunteers ----------
 async function renderVolunteers() {
   const d = state.day;
   $('#vol-list').innerHTML = d.volunteers.map((v, i) =>
     `<span class="chip">${esc(v)}<button data-rm-vol="${i}" aria-label="Remove">×</button></span>`).join('');
-
-  // suggest names used on other days, most frequent first
   const counts = new Map();
   (await db.all('days')).forEach((day) => day.volunteers.forEach((v) => {
     const k = v.toLowerCase(); counts.set(k, { name: v, n: (counts.get(k)?.n || 0) + 1 });
@@ -251,34 +421,82 @@ $('#vol-suggest').addEventListener('click', (e) => {
   if (b) addVolunteer(b.dataset.addVol);
 });
 
-// ---------- export day ----------
-async function flushNotes() {
-  if (notesTimer) { clearTimeout(notesTimer); state.day.notes = $('#notes').value; await saveDay(state.day); }
-}
+// ---------- export day (then start a fresh, blank form) ----------
 $('#export-day').addEventListener('click', async () => {
+  const btn = $('#export-day');
+  if (btn.classList.contains('working')) return;
   await flushNotes();
-  await saveDay(state.day);
-  const report = await busy('Building your day report…', () => buildReport([state.day], 'day'));
-  await shareOrDownload(report);
+  const d = state.day;
+  const photos = await db.photosForDay(d.id);
+  if (!hasContent(d, photos.length)) return toast('Nothing to export yet. Clock in or add photos first 🌱');
+  const open = openShift(d);
+  if (open) {
+    if (!confirm("You're still clocked in. Clock out now and export?")) return;
+    open.out = Date.now();
+  }
+  btn.classList.add('working'); btn.textContent = 'Exporting…';
+  try {
+    await saveDay(d);
+    await exportReport([d], 'day', {
+      onDone: async () => {
+        // File it under Daily Reports and clear the form for next time.
+        d.status = 'done'; d.exportedAt = Date.now();
+        await saveDay(d);
+        const fresh = newDay(getName());
+        setDraftId(fresh.id);
+        await renderToday();
+        window.scrollTo(0, 0);
+        toast('Saved to Daily Reports ✓  The form is ready for next time.', 3500);
+      },
+    });
+  } finally {
+    btn.classList.remove('working'); btn.textContent = 'Export Day Report';
+  }
 });
 
-$('#back-to-today').addEventListener('click', () => { state.editingId = dayId(); renderToday(); });
+// ---------- editing a saved day ----------
+function startEditing(day) {
+  state.mode = 'edit';
+  state.day = day;
+  showView('view-today');
+}
+async function finishEditing() {
+  if (state.mode !== 'edit') return;
+  await flushNotes();
+  await saveDay(state.day);
+  state.mode = 'today';
+  toast('Changes saved ✓');
+}
+$('#done-edit').addEventListener('click', async () => { await finishEditing(); showView('view-days'); });
+$('#done-edit-top').addEventListener('click', async () => { await finishEditing(); showView('view-days'); });
+$('#edit-date').addEventListener('change', async (e) => {
+  if (!e.target.value) return;
+  state.day.date = e.target.value;
+  await saveDay(state.day);
+  toast(`Moved to ${fmtDate(parseDayId(state.day.date))}`);
+  renderPhotos();
+});
+$('#edit-export').addEventListener('click', async () => {
+  await flushNotes();
+  await saveDay(state.day);
+  exportReport([state.day], 'day');
+});
 
 // ================================================================ DAILY REPORTS
-async function allDays() {
-  const days = await db.all('days');
+async function savedDays() {
+  const days = (await db.all('days')).filter((d) => d.status !== 'draft');
   const out = [];
   for (const d of days) {
-    const photos = await db.photosForDay(d.id);
-    if (isEmpty(d) && !photos.length) continue;
-    out.push({ day: d, photos: photos.sort((a, b) => a.takenAt - b.takenAt) });
+    const photos = (await db.photosForDay(d.id)).sort((a, b) => a.takenAt - b.takenAt);
+    if (!hasContent(d, photos.length)) continue;
+    out.push({ day: d, photos });
   }
-  return out.sort((a, b) => b.day.id.localeCompare(a.day.id));
+  return out.sort((a, b) => byDate(b.day, a.day));
 }
 
 async function renderDays() {
   freeUrls();
-  const items = await allDays();
+  const items = await savedDays();
   $('#select-btn').textContent = state.selecting ? 'Cancel' : 'Select';
   $('#select-btn').hidden = !items.length;
   $('#select-hint').hidden = !state.selecting;
@@ -288,7 +506,7 @@ async function renderDays() {
   $('#export-week').textContent = n ? `Export Week (${n} day${n > 1 ? 's' : ''})` : 'Export Week';
 
   if (!items.length) {
-    $('#day-list').innerHTML = `<div class="empty"><div class="big">🌱</div>No daily reports yet.<br>Clock in on the Today tab to start one.</div>`;
+    $('#day-list').innerHTML = `<div class="empty"><div class="big">🌱</div>No daily reports yet.<br>Fill in the Today tab and tap <b>Export Day Report</b>.</div>`;
     return;
   }
   $('#day-list').innerHTML = items.map(({ day, photos }) => {
@@ -298,7 +516,7 @@ async function renderDays() {
     if (day.volunteers.length) bits.push(`${day.volunteers.length} volunteer${day.volunteers.length === 1 ? '' : 's'}`);
     return `<button class="row ${sel ? 'selected' : ''}" data-day="${day.id}">
       ${thumb}
-      <div class="meta"><div class="title">${fmtDate(parseDayId(day.id), { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+      <div class="meta"><div class="title">${fmtDate(parseDayId(day.date), { weekday: 'long', month: 'short', day: 'numeric' })}</div>
       <div class="info">${bits.join(' · ')}</div></div>
       ${state.selecting ? `<span class="check">${sel ? '✓' : ''}</span>` : '<span class="info">›</span>'}
     </button>`;
@@ -324,117 +542,109 @@ $('#day-list').addEventListener('click', async (e) => {
 });
 
 async function dayDetail(id) {
-  const d = await loadDay(id);
+  const d = await db.get('days', id);
+  if (!d) return;
   const photos = (await db.photosForDay(id)).sort((a, b) => a.takenAt - b.takenAt);
   const body = openSheet(`
-    <h3>${fmtDate(parseDayId(id))}</h3>
+    <h3>${fmtDate(parseDayId(d.date))}</h3>
     <p class="sub">${d.sessions.map((s) => `${fmtTime(s.in)} – ${s.out ? fmtTime(s.out) : 'open'}`).join(', ') || 'No shifts logged'} · ${fmtHours(dayHours(d))}</p>
     ${d.notes.trim() ? `<div class="notes-preview">${esc(d.notes)}</div>` : ''}
     ${d.volunteers.length ? `<p class="sub" style="margin-top:12px"><b>Volunteers:</b> ${d.volunteers.map(esc).join(', ')}</p>` : ''}
     ${photos.length ? `<div class="mini-grid">${photos.map((p) => `<img src="${blobUrl(p.blob)}" alt="">`).join('')}</div>` : ''}
     <div class="btn-row">
-      <button class="btn ghost" id="dd-edit">Edit</button>
+      <button class="btn ghost" id="dd-edit">✎ Edit</button>
       <button class="btn export" id="dd-export">Export</button>
     </div>
     <button class="btn big danger" id="dd-del">Delete this day</button>
+    <button class="btn big ghost" id="dd-close">Close</button>
   `);
-  body.querySelector('#dd-edit').onclick = () => { closeSheet(); state.editingId = id; showView('view-today'); };
-  body.querySelector('#dd-export').onclick = async () => {
-    const report = await busy('Building your day report…', () => buildReport([d], 'day'));
-    await shareOrDownload(report);
-  };
+  body.querySelector('#dd-edit').onclick = () => { closeSheet(); startEditing(d); };
+  body.querySelector('#dd-export').onclick = () => { closeSheet(); exportReport([d], 'day'); };
   body.querySelector('#dd-del').onclick = async () => {
     if (!confirm('Delete this day and all its photos? This cannot be undone.')) return;
     await db.deletePhotosForDay(id);
     await db.del('days', id);
-    if (localStorage.getItem(ACTIVE_KEY) === id) localStorage.removeItem(ACTIVE_KEY);
     closeSheet(); renderDays();
   };
+  body.querySelector('#dd-close').onclick = closeSheet;
 }
 
 $('#export-week').addEventListener('click', async () => {
-  const ids = [...state.selected].sort();
+  const ids = [...state.selected];
   if (!ids.length) return;
-  const days = await Promise.all(ids.map(loadDay));
-  const report = await busy('Building your week report…', () => buildReport(days, 'week'));
-  const week = { id: uid(), dayIds: ids, createdAt: Date.now(), hours: days.reduce((t, d) => t + dayHours(d), 0) };
-  await db.put('weeks', week);
-  state.selecting = false;
-  state.selected.clear();
-  await shareOrDownload(report);
-  toast('Week report saved under Weekly Reports 🌻');
-  renderDays();
+  const days = (await Promise.all(ids.map((id) => db.get('days', id)))).filter(Boolean).sort(byDate);
+  await exportReport(days, 'week', {
+    onDone: async () => {
+      await db.put('weeks', { id: uid(), dayIds: days.map((d) => d.id), createdAt: Date.now(), hours: days.reduce((t, d) => t + dayHours(d), 0) });
+      state.selecting = false;
+      state.selected.clear();
+      renderDays();
+      toast('Week report saved under Weekly Reports 🌻');
+    },
+  });
 });
 
 // ================================================================ WEEKLY REPORTS
+const rangeText = (days) => {
+  const a = parseDayId(days[0].date), b = parseDayId(days[days.length - 1].date);
+  return days[0].date === days[days.length - 1].date ? fmtDate(a, { month: 'short', day: 'numeric', year: 'numeric' })
+    : `${fmtDate(a, { month: 'short', day: 'numeric' })} – ${fmtDate(b, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+};
+async function weekDays(w) {
+  return (await Promise.all(w.dayIds.map((id) => db.get('days', id)))).filter(Boolean).sort(byDate);
+}
+
 async function renderWeeks() {
-  const weeks = (await db.all('weeks')).sort((a, b) => b.dayIds[0].localeCompare(a.dayIds[0]));
-  if (!weeks.length) {
+  const weeks = [];
+  for (const w of await db.all('weeks')) weeks.push({ w, days: await weekDays(w) });
+  const live = weeks.filter((x) => x.days.length).sort((a, b) => byDate(b.days[0], a.days[0]));
+  if (!live.length) {
     $('#week-list').innerHTML = `<div class="empty"><div class="big">🌻</div>No weekly reports yet.<br>Go to Daily Reports, tap <b>Select</b>, pick the week's days, then <b>Export Week</b>.</div>`;
     return;
   }
-  $('#week-list').innerHTML = weeks.map((w) => `
+  $('#week-list').innerHTML = live.map(({ w, days }) => `
     <button class="row" data-week="${w.id}">
       <div class="thumb">❁</div>
-      <div class="meta"><div class="title">${weekRange(w)}</div>
-      <div class="info">${w.dayIds.length} day${w.dayIds.length > 1 ? 's' : ''} · ${fmtHours(w.hours || 0)}</div></div>
+      <div class="meta"><div class="title">${rangeText(days)}</div>
+      <div class="info">${days.length} day${days.length > 1 ? 's' : ''} · ${fmtHours(days.reduce((t, d) => t + dayHours(d), 0))}</div></div>
       <span class="info">›</span>
     </button>`).join('');
 }
-const weekRange = (w) => {
-  const a = parseDayId(w.dayIds[0]), b = parseDayId(w.dayIds[w.dayIds.length - 1]);
-  return w.dayIds.length === 1 ? fmtDate(a, { month: 'short', day: 'numeric', year: 'numeric' })
-    : `${fmtDate(a, { month: 'short', day: 'numeric' })} – ${fmtDate(b, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-};
 
 $('#week-list').addEventListener('click', async (e) => {
   const row = e.target.closest('[data-week]');
   if (!row) return;
   const w = await db.get('weeks', row.dataset.week);
-  const days = (await Promise.all(w.dayIds.map((id) => db.get('days', id)))).filter(Boolean);
+  const days = await weekDays(w);
   const body = openSheet(`
-    <h3>Week of ${weekRange(w)}</h3>
-    <p class="sub">${days.map((d) => fmtDate(parseDayId(d.id), { weekday: 'short', month: 'numeric', day: 'numeric' })).join(' · ')}</p>
+    <h3>Week of ${rangeText(days)}</h3>
+    <p class="sub">${days.map((d) => fmtDate(parseDayId(d.date), { weekday: 'short', month: 'numeric', day: 'numeric' })).join(' · ')}</p>
     <p class="sub">The report is rebuilt from the latest daily entries, so any edits you made since are included.</p>
-    <button class="btn big export" id="wk-export">Open / Share Report</button>
+    <button class="btn big export" id="wk-export">Build &amp; Share Report</button>
     <button class="btn big danger" id="wk-del">Remove from list</button>
+    <button class="btn big ghost" id="wk-close">Close</button>
   `);
-  body.querySelector('#wk-export').onclick = async () => {
-    if (!days.length) return toast('The days in this report were deleted');
-    const report = await busy('Building your week report…', () => buildReport(days, 'week'));
-    w.hours = days.reduce((t, d) => t + dayHours(d), 0);
-    await db.put('weeks', w);
-    await shareOrDownload(report);
-  };
+  body.querySelector('#wk-export').onclick = () => { closeSheet(); exportReport(days, 'week'); };
   body.querySelector('#wk-del').onclick = async () => {
     if (!confirm('Remove this weekly report? (The daily reports are kept.)')) return;
     await db.del('weeks', w.id);
     closeSheet(); renderWeeks();
   };
+  body.querySelector('#wk-close').onclick = closeSheet;
 });
 
 // ================================================================ boot
 async function boot() {
   requestPersistence();
-  // If she clocked in on a previous day and never clocked out, open that day so she can fix it.
-  const active = localStorage.getItem(ACTIVE_KEY);
-  if (active && active !== dayId()) {
-    state.editingId = active;
-    setTimeout(() => toast("You're still clocked in from an earlier day — tap ✎ to set the clock-out time."), 2200);
-  }
+  await migrate();
   await renderToday();
   const minSplash = 1900;
   setTimeout(() => $('#splash').classList.add('done'), Math.max(0, minSplash - performance.now()));
 }
-// Coming back to the app the next morning: roll the Today screen over to the new date
-// (unless she was deliberately editing an older day or is still clocked in).
+// Coming back to the app on a new day: file yesterday's entry and show a fresh form.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden || !state.day) return;
-  const wasOnToday = state.editingId === state.todayAtRender;
-  if (wasOnToday && dayId() !== state.todayAtRender && !openShift(state.day)) {
-    state.editingId = dayId();
-    renderToday();
-  }
+  if (!document.hidden && state.mode === 'today' && state.day && state.day.date < dayId()
+      && $('#view-today').classList.contains('active')) renderToday();
 });
 boot();
 

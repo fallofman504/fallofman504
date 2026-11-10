@@ -2,13 +2,15 @@
 
 A phone app (a Progressive Web App) for logging community garden shifts and exporting nice-looking day and week reports.
 
+- **Your name**: shown at the top of the Today screen (defaults to Nicky) and printed on every report as "Prepared by".
 - **Clock in / Clock out**: one big button. Shifts can be edited or added by hand (✎) if she forgets.
-- **Photos**: the date and time are read from the photo's camera metadata (EXIF) and stamped in the bottom-left corner. If a photo has no camera date, the file date is used and the photo gets a "file date" tag.
+- **Photos**: **📷 Take Photo** uses the camera; **🖼 Choose Photos** picks from the library. Each photo is stamped bottom-left with the time it was taken, read from the photo's "date taken" metadata. If a photo has no "date taken" (some shared or downloaded photos don't), it's marked **check time**, and tapping any photo lets her see where the time came from and fix it.
 - **Reflection notes**: saved automatically as she types.
 - **Volunteers**: names she has used before show up as one-tap suggestions.
-- **Export Day Report**: makes a PDF and opens the phone's share sheet (Save to Files, Mail, Messages…).
-- **Daily Reports → Select → Export Week**: one PDF with a combined time sheet and hour totals, all the reflection notes, the volunteers and which days each one came, and every photo in chronological order.
+- **Export Day Report**: shows a progress spinner, then a "report ready" card with a **Share / Save PDF** button (Save to Files, Mail, Messages…). The day is filed under Daily Reports and the Today form resets to blank.
+- **Daily Reports**: tap a day to edit (finish with **Done**), re-export, or delete it. **Select → Export Week** makes one PDF with a combined time sheet and hour totals, all the reflection notes, the volunteers and which days each one came, and every photo in chronological order.
 - **Weekly Reports**: past week reports. Opening one rebuilds it from the latest daily entries.
+- If she forgets to export, that day is filed automatically the next time she opens the app.
 - **Works offline** at the garden. All data stays on her phone (IndexedDB). There is no server and no account.
 
 ## Hosting (free, with GitHub Pages)
