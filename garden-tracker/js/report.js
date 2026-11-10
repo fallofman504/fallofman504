@@ -1,6 +1,7 @@
 // Builds the day / week PDF report with a fixed, pretty layout,
 // so nobody has to fuss with fonts and picture placement ever again.
 import { db } from './db.js';
+import { readBuffer } from './photos.js';
 import { fmtDate, fmtTime, fmtHours, sessionHours, dayHours, parseDayId } from './util.js';
 
 const C = {
@@ -21,13 +22,15 @@ const clean = (s) => (s || '')
   .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ–—•…]/g, '')
   .replace(/[ \t]{2,}/g, ' ');
 
-function blobToDataURL(blob) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = () => rej(r.error);
-    r.readAsDataURL(blob);
-  });
+/** The stamped photo's JPEG bytes, or null if this photo can't be read. */
+async function photoBytes(p) {
+  let bytes = null;
+  try {
+    if (p.jpeg) bytes = new Uint8Array(p.jpeg);
+    else if (p.blob) bytes = new Uint8Array(await readBuffer(p.blob)); // photo saved by an older version
+  } catch { /* unreadable */ }
+  // must look like a real JPEG (starts with FF D8) or it is left out
+  return bytes && bytes.length > 100 && bytes[0] === 0xff && bytes[1] === 0xd8 ? bytes : null;
 }
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -224,9 +227,16 @@ export async function buildReport(days, kind, { name = '', onProgress = () => {}
   }
 
   // ---------- photos ----------
-  const photos = [];
+  const all = [];
   const dateOf = new Map(days.map((d) => [d.id, d.date]));
-  for (const d of days) photos.push(...(await db.photosForDay(d.id)));
+  for (const d of days) all.push(...(await db.photosForDay(d.id)));
+  // Read every photo first; one unreadable photo must never stop the whole report.
+  const photos = [];
+  let skipped = 0;
+  for (const p of all) {
+    const bytes = await photoBytes(p);
+    if (bytes && p.width && p.height) photos.push({ ...p, bytes }); else skipped++;
+  }
   // chronological, grouped under each day in order
   const order = new Map(days.map((d, i) => [d.id, i]));
   photos.sort((a, b) => order.get(a.dayId) - order.get(b.dayId) || a.takenAt - b.takenAt);
@@ -257,10 +267,15 @@ export async function buildReport(days, kind, { name = '', onProgress = () => {}
       const x = M + col * (cellW + gap) + (cellW - w) / 2;
       onProgress(`Adding photo ${photos.indexOf(p) + 1} of ${photos.length}…`);
       await nextFrame();
-      const data = await blobToDataURL(p.blob);
       doc.setFillColor(236, 240, 237);
       doc.roundedRect(x - 3, rowY - 3, w + 6, h + 6, 4, 4, 'F');
-      doc.addImage(data, 'JPEG', x, rowY, w, h, undefined, 'FAST');
+      try {
+        doc.addImage(p.bytes, 'JPEG', x, rowY, w, h, undefined, 'FAST');
+      } catch (err) {
+        console.error('photo skipped', err);
+        skipped++;
+      }
+      p.bytes = null; // free memory as we go
       rowH = Math.max(rowH, h);
       col++;
       if (col === 2) { col = 0; y = rowY + rowH + gap; }
@@ -273,6 +288,7 @@ export async function buildReport(days, kind, { name = '', onProgress = () => {}
   footer();
   const stamp = days.length === 1 ? days[0].date : `${days[0].date}_to_${days[days.length - 1].date}`;
   return {
+    skipped,
     pages: doc.internal.getNumberOfPages(),
     blob: doc.output('blob'),
     filename: `Garden-${kind === 'week' ? 'Week' : 'Day'}-Report_${stamp}.pdf`,

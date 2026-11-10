@@ -117,6 +117,31 @@ function loadImage(blob) {
   });
 }
 const toBlob = (canvas, q) => new Promise((r) => canvas.toBlob(r, 'image/jpeg', q));
+const toBuffer = async (canvas, q) => (await toBlob(canvas, q)).arrayBuffer();
+
+// Photos are saved as raw bytes (ArrayBuffer), not as Blobs. iPhone Safari can lose access
+// to Blobs saved in browser storage, which made thumbnails break and PDF export fail.
+export const jpegBlob = (buf) => new Blob([buf], { type: 'image/jpeg' });
+
+/** Read a Blob into an ArrayBuffer (works on older iPhones too). */
+export function readBuffer(blob) {
+  if (blob.arrayBuffer) return blob.arrayBuffer();
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.readAsArrayBuffer(blob);
+  });
+}
+
+const THUMB_EDGE = 480;
+async function thumbFrom(source, w, h) {
+  const scale = Math.min(1, THUMB_EDGE / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+  c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+  return toBuffer(c, 0.8);
+}
 
 export function stampText(date) {
   const d = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -125,9 +150,10 @@ export function stampText(date) {
 }
 
 /**
- * Resize a picked photo, and stamp it.
- * Returns { orig, blob, width, height }: orig is the clean (unstamped) copy, kept so the
- * stamp can be redone if the time needs fixing.
+ * Resize a picked photo and stamp it. All results are ArrayBuffers of JPEG bytes:
+ *   jpeg  – the stamped photo used in reports
+ *   orig  – a clean (unstamped) copy, so the stamp can be redone if the time needs fixing
+ *   thumb – a small copy for the on-screen grid
  */
 export async function processPhoto(file, date) {
   const img = await loadImage(file); // browsers auto-rotate using EXIF orientation
@@ -138,21 +164,28 @@ export async function processPhoto(file, date) {
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
-  const orig = await toBlob(canvas, 0.9);
+  const orig = await toBuffer(canvas, 0.9);
   drawStamp(ctx, w, h, date);
-  const blob = await toBlob(canvas, 0.86);
-  return { orig, blob, width: w, height: h };
+  const jpeg = await toBuffer(canvas, 0.86);
+  const thumb = await thumbFrom(canvas, w, h);
+  return { jpeg, orig, thumb, width: w, height: h };
 }
 
-/** Redo the stamp on the clean copy with a corrected time. */
-export async function restamp(origBlob, date) {
-  const img = await loadImage(origBlob);
+/** Redo the stamp on the clean copy with a corrected time. Returns { jpeg, thumb }. */
+export async function restamp(origBuf, date) {
+  const img = await loadImage(jpegBlob(origBuf));
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
   drawStamp(ctx, canvas.width, canvas.height, date);
-  return toBlob(canvas, 0.86);
+  return { jpeg: await toBuffer(canvas, 0.86), thumb: await thumbFrom(canvas, canvas.width, canvas.height) };
+}
+
+/** Make a thumbnail from stored JPEG bytes (used when upgrading older photos). */
+export async function makeThumb(jpegBuf) {
+  const img = await loadImage(jpegBlob(jpegBuf));
+  return thumbFrom(img, img.naturalWidth, img.naturalHeight);
 }
 
 function drawStamp(ctx, w, h, date) {

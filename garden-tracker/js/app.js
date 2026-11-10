@@ -1,5 +1,5 @@
 import { db, requestPersistence } from './db.js';
-import { readTakenDate, processPhoto, restamp, stampText, SOURCE_TEXT } from './photos.js';
+import { readTakenDate, processPhoto, restamp, stampText, SOURCE_TEXT, jpegBlob, readBuffer, makeThumb } from './photos.js';
 import { buildReport, shareOrDownload, byDate } from './report.js';
 import {
   dayId, parseDayId, fmtDate, fmtTime, fmtHours, fmtElapsed, sessionHours, dayHours,
@@ -20,6 +20,11 @@ const state = {
 const urls = new Set();
 const blobUrl = (blob) => { const u = URL.createObjectURL(blob); urls.add(u); return u; };
 const freeUrls = () => { urls.forEach((u) => URL.revokeObjectURL(u)); urls.clear(); };
+// Photos are stored as raw JPEG bytes; these turn them into something an <img> can show.
+const thumbUrl = (p) => blobUrl(jpegBlob(p.thumb || p.jpeg));
+const fullUrl = (p) => blobUrl(jpegBlob(p.jpeg));
+const LOST = '<div class="lost">⚠<br>Photo lost<br>please re-add</div>';
+const photoImg = (p, cls = '') => (p.broken ? LOST : `<img ${cls ? `class="${cls}"` : ''} src="${thumbUrl(p)}" alt="">`);
 
 const getName = () => { try { return localStorage.getItem(NAME_KEY) ?? DEFAULT_NAME; } catch { return DEFAULT_NAME; } };
 const setName = (n) => { try { localStorage.setItem(NAME_KEY, n); } catch { /* ignore */ } };
@@ -61,8 +66,32 @@ async function loadDraft() {
   return d;
 }
 
+/**
+ * Photos saved by earlier versions were stored as Blobs, which iPhone Safari can lose access
+ * to (broken "?" thumbnails, failed exports). Copy them into raw bytes while they still read.
+ */
+async function migratePhotos() {
+  for (const p of await db.all('photos')) {
+    if (p.jpeg || p.broken || !(p.blob instanceof Blob)) continue;
+    try {
+      p.jpeg = await readBuffer(p.blob);
+      p.thumb = await makeThumb(p.jpeg);
+      if (p.orig instanceof Blob) {
+        try { p.orig = await readBuffer(p.orig); } catch { delete p.orig; }
+      }
+    } catch (err) {
+      console.error('could not rescue photo', p.id, err);
+      p.broken = true;
+      delete p.orig;
+    }
+    delete p.blob;
+    await db.put('photos', p);
+  }
+}
+
 /** Older versions keyed reports by date; give them the new fields. */
 async function migrate() {
+  await migratePhotos();
   for (const d of await db.all('days')) {
     if (!d.date) {
       d.date = d.id; d.status = 'done'; d.createdAt = d.createdAt || d.updatedAt || Date.now();
@@ -126,7 +155,7 @@ async function exportReport(days, kind, { onDone } = {}) {
       (progress) => buildReport(days, kind, { name: getName(), onProgress: progress }));
   } catch (err) {
     console.error(err);
-    toast('Sorry, the report could not be built. Please try again.');
+    toast(`Sorry, the report could not be built (${err?.message || err}). Please send Claude a screenshot of this.`, 8000);
     return false;
   }
   if (onDone) await onDone();
@@ -137,6 +166,7 @@ async function exportReport(days, kind, { onDone } = {}) {
       <h3>${kind === 'week' ? 'Week' : 'Day'} report is ready!</h3>
       <div class="file">📄 ${esc(report.filename)}</div>
       <p class="sub">${report.pages} page${report.pages > 1 ? 's' : ''} · ${sizeMb} MB</p>
+      ${report.skipped ? `<p class="src-note warn">${report.skipped} photo${report.skipped > 1 ? 's' : ''} couldn't be read and ${report.skipped > 1 ? 'were' : 'was'} left out. Re-add ${report.skipped > 1 ? 'them' : 'it'} on that day and export again.</p>` : ''}
     </div>
     <button class="btn big export" id="rd-share">Share / Save PDF</button>
     <button class="btn big ghost" id="rd-done">Done</button>
@@ -276,8 +306,8 @@ async function renderPhotos() {
     if (needsCheck(p)) badge = '<span class="warn">check time</span>';
     else if (otherDay) badge = `<span class="warn">${fmtDate(p.takenAt, { month: 'short', day: 'numeric' })}</span>`;
     return `<div class="photo" data-photo="${p.id}">
-      <img src="${blobUrl(p.blob)}" alt="">
-      ${badge}
+      ${photoImg(p)}
+      ${p.broken ? '' : badge}
       <button class="del" data-del-photo="${p.id}" aria-label="Remove photo">×</button>
     </div>`;
   }).join('');
@@ -294,10 +324,10 @@ async function addPhotos(files, fromCamera) {
     prog.textContent = `Stamping photo ${i + 1} of ${files.length}…`;
     try {
       const { date, source, detail } = await readTakenDate(files[i], { fromCamera });
-      const { orig, blob, width, height } = await processPhoto(files[i], date);
+      const { jpeg, orig, thumb, width, height } = await processPhoto(files[i], date);
       await db.put('photos', {
         id: uid(), dayId: d.id, takenAt: date.getTime(), dateSource: source, dateDetail: detail,
-        blob, orig, width, height,
+        jpeg, orig, thumb, width, height,
       });
       ok++;
       if (source === 'file' || source === 'modified') unsure++;
@@ -332,9 +362,18 @@ const toLocalInput = (ms) => { const d = new Date(ms); return `${dayId(d)}T${pad
 async function photoSheet(id) {
   const p = await db.get('photos', id);
   if (!p) return;
+  if (p.broken) {
+    const b = openSheet(`<h3>This photo was lost</h3>
+      <p class="sub">An older version of the app saved it in a way iPhone couldn't read back. Please remove it and add it again.</p>
+      <button class="btn big danger" id="ph-del">Remove photo</button>
+      <button class="btn big ghost" id="ph-close">Close</button>`);
+    b.querySelector('#ph-del').onclick = async () => { await db.del('photos', p.id); closeSheet(); renderPhotos(); };
+    b.querySelector('#ph-close').onclick = closeSheet;
+    return;
+  }
   const warn = needsCheck(p);
   const body = openSheet(`
-    <img class="photo-big" src="${blobUrl(p.blob)}" alt="">
+    <img class="photo-big" src="${fullUrl(p)}" alt="">
     <h3>${esc(stampText(new Date(p.takenAt)))}</h3>
     <div class="src-note ${warn ? 'warn' : ''}">${esc(SOURCE_TEXT[p.dateSource] || 'This photo was added before the time checker existed.')}
       ${p.dateDetail ? `<p class="src-raw">${esc(p.dateDetail)}</p>` : ''}</div>
@@ -352,7 +391,9 @@ async function photoSheet(id) {
     const [date, time] = v.split('T');
     const when = new Date(fromTimeInput(date, time.slice(0, 5)));
     save.classList.add('working');
-    p.blob = await restamp(p.orig, when);
+    const fixed = await restamp(p.orig, when);
+    p.jpeg = fixed.jpeg;
+    p.thumb = fixed.thumb;
     p.takenAt = when.getTime();
     p.dateSource = 'manual';
     p.dateDetail = 'Time set by hand';
@@ -511,7 +552,8 @@ async function renderDays() {
   }
   $('#day-list').innerHTML = items.map(({ day, photos }) => {
     const sel = state.selected.has(day.id);
-    const thumb = photos[0] ? `<img class="thumb" src="${blobUrl(photos[0].blob)}" alt="">` : '<div class="thumb">✿</div>';
+    const first = photos.find((p) => !p.broken);
+    const thumb = first ? photoImg(first, 'thumb') : '<div class="thumb">✿</div>';
     const bits = [fmtHours(dayHours(day)), `${photos.length} photo${photos.length === 1 ? '' : 's'}`];
     if (day.volunteers.length) bits.push(`${day.volunteers.length} volunteer${day.volunteers.length === 1 ? '' : 's'}`);
     return `<button class="row ${sel ? 'selected' : ''}" data-day="${day.id}">
@@ -550,7 +592,7 @@ async function dayDetail(id) {
     <p class="sub">${d.sessions.map((s) => `${fmtTime(s.in)} – ${s.out ? fmtTime(s.out) : 'open'}`).join(', ') || 'No shifts logged'} · ${fmtHours(dayHours(d))}</p>
     ${d.notes.trim() ? `<div class="notes-preview">${esc(d.notes)}</div>` : ''}
     ${d.volunteers.length ? `<p class="sub" style="margin-top:12px"><b>Volunteers:</b> ${d.volunteers.map(esc).join(', ')}</p>` : ''}
-    ${photos.length ? `<div class="mini-grid">${photos.map((p) => `<img src="${blobUrl(p.blob)}" alt="">`).join('')}</div>` : ''}
+    ${photos.length ? `<div class="mini-grid">${photos.map((p) => photoImg(p)).join('')}</div>` : ''}
     <div class="btn-row">
       <button class="btn ghost" id="dd-edit">✎ Edit</button>
       <button class="btn export" id="dd-export">Export</button>
