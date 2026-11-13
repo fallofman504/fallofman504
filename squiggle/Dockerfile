@@ -1,5 +1,7 @@
 # Works on both regular PCs (amd64) and Raspberry Pi 4/5 (arm64).
-FROM node:22-bookworm-slim AS build
+# The build stage uses the full Node image because it includes the compiler tools (python, make, g++)
+# needed when the database library has no ready-made binary to download for this machine.
+FROM node:22-bookworm AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
