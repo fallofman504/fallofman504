@@ -5,7 +5,8 @@ import type { NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   if (!host.toLowerCase().startsWith("www.")) return NextResponse.next();
-  const proto = request.headers.get("x-forwarded-proto") === "http" ? "http" : "https";
+  const target = host.slice(4);
+  const proto = /^(localhost|127\.)/.test(target) ? "http" : "https"; // always https on the real site
   const { pathname, search } = request.nextUrl;
-  return NextResponse.redirect(`${proto}://${host.slice(4)}${pathname}${search}`, 308);
+  return NextResponse.redirect(`${proto}://${target}${pathname}${search}`, 308);
 }
