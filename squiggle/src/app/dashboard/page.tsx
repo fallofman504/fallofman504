@@ -16,14 +16,20 @@ export default async function Dashboard() {
           <p className="eyebrow">Hi, {user.name.split(" ")[0]}</p>
           <h1 className="mt-2 text-4xl font-extrabold">My projects</h1>
         </div>
-        <Link href="/requests/new" className="btn btn-coral">New project</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/print" className="btn btn-ghost">Print my model</Link>
+          <Link href="/requests/new" className="btn btn-coral">New custom design</Link>
+        </div>
       </div>
 
       {requests.length === 0 ? (
         <div className="card mt-8 text-center">
           <h2 className="text-2xl font-bold">Nothing here yet</h2>
           <p className="mx-auto mt-2 max-w-md text-muted">Send us a photo, a file, or a description and we&apos;ll come back with a 3D model and a quote in about an hour.</p>
-          <Link href="/requests/new" className="btn btn-coral mt-5">Start your first project</Link>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Link href="/requests/new" className="btn btn-coral">Start a custom design</Link>
+            <Link href="/print" className="btn btn-ghost">Print my model</Link>
+          </div>
         </div>
       ) : (
         <ul className="mt-8 space-y-3">

@@ -47,6 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const printTotal = items.reduce((s, i) => s + i.amount_cents, 0);
   if (items.length && printTotal < 50) return bad("Print total must be at least $0.50.");
   if (stl != null && stl < 50) return bad("STL price must be at least $0.50.");
+  if (request.kind === "print_only" && stl != null) return bad("This customer supplied their own model, so there's no STL to sell. Send a print price breakdown only.");
   if (!items.length && stl == null) return bad("A quote needs a print price breakdown, an STL price, or both.");
 
   const leadRaw = String(fd.get("lead_time_days") ?? "").trim();

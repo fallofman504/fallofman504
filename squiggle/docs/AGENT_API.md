@@ -38,6 +38,37 @@ Add `?status=quoted`, `ordered`, `closed`, or `all` to see others.
 `GET /api/agent/requests/{id}` returns one request in the same shape. Download each file from its `url` with the
 same `Authorization` header. `intent` is what the customer said they want: `stl`, `print`, or `undecided`.
 
+### Two kinds of request
+
+Each request has a `kind`:
+
+- `custom` — the customer wants Squiggle to design something. Build the model and quote as described below.
+- `print_only` — the customer uploaded their own finished 3D model (it's in `files`) and only wants it printed.
+  There is nothing to design: check the model is printable, price it with the settings they chose, and send a print
+  price breakdown. Don't send `stl_price_cents` (it's rejected); `turntable`, `render`, and `model` are optional.
+
+### Print settings
+
+When the customer chose print settings, the request carries them in `print_spec`, with a readable version in
+`print_spec_summary`. Always present for `print_only`; present for `custom` when the customer picked "Print it for
+me". Price the print to these settings.
+
+```json
+"print_spec": {
+  "process": "filament",      // "filament" or "resin"
+  "material": "petg",
+  "color": "Blue",
+  "layer": "0.12",            // layer height in mm
+  "infill": "40",             // percent; null for resin
+  "supports": "tree",         // "auto" (Squiggle decides), "none", "classic", "tree"; resin uses "auto", "none", "yes"
+  "fuzzy_skin": "outer",      // "none", "outer", "all"; null for resin
+  "quantity": 3
+}
+```
+
+The full menu of allowed values lives in `src/lib/print-options.ts`. Parts under the brim threshold in that file
+(25 mm) get a brim automatically; customers are told this when they choose settings.
+
 ## 2. Ask the customer a question (optional)
 
 `POST /api/agent/requests/{id}/messages` with JSON `{ "body": "How big should it be?" }`.

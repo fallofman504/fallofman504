@@ -1,7 +1,8 @@
 import "server-only";
 import crypto from "node:crypto";
 import { db } from "./db";
-import type { Address, DesignRequest, FileRow, Fulfillment, Intent, LineItem, Message, Order, OrderType, Payment, Quote, User } from "./types";
+import type { PrintSpec } from "./print-options";
+import type { Address, DesignRequest, FileRow, Fulfillment, Intent, LineItem, Message, Order, OrderType, Payment, Quote, RequestKind, User } from "./types";
 
 const uid = () => crypto.randomUUID();
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -27,27 +28,32 @@ export function setUserRole(id: string, role: string) {
 }
 
 // ---------- requests ----------
-export function createRequest(r: { user_id: string; title: string; prompt: string; intent: Intent }): DesignRequest {
+type RequestRow<T = DesignRequest> = Omit<T, "print_spec"> & { print_spec_json: string | null };
+const toRequest = <T extends DesignRequest>({ print_spec_json, ...r }: RequestRow<T>) =>
+  ({ ...r, print_spec: print_spec_json ? (JSON.parse(print_spec_json) as PrintSpec) : null }) as unknown as T;
+
+export function createRequest(r: { user_id: string; title: string; prompt: string; intent: Intent; kind: RequestKind; print_spec: PrintSpec | null }): DesignRequest {
   const id = uid();
   db()
-    .prepare("INSERT INTO requests (id, ref, user_id, title, prompt, intent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?)")
-    .run(id, ref("SQ"), r.user_id, r.title, r.prompt, r.intent, Date.now());
+    .prepare("INSERT INTO requests (id, ref, user_id, title, prompt, intent, kind, print_spec_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)")
+    .run(id, ref("SQ"), r.user_id, r.title, r.prompt, r.intent, r.kind, r.print_spec ? JSON.stringify(r.print_spec) : null, Date.now());
   return getRequest(id)!;
 }
 export function getRequest(id: string) {
-  return db().prepare("SELECT * FROM requests WHERE id = ?").get(id) as DesignRequest | undefined;
+  const row = db().prepare("SELECT * FROM requests WHERE id = ?").get(id) as RequestRow | undefined;
+  return row && toRequest(row);
 }
 export function listRequestsForUser(userId: string) {
-  return db().prepare("SELECT * FROM requests WHERE user_id = ? ORDER BY created_at DESC").all(userId) as DesignRequest[];
+  return (db().prepare("SELECT * FROM requests WHERE user_id = ? ORDER BY created_at DESC").all(userId) as RequestRow[]).map(toRequest);
 }
 export type RequestWithCustomer = DesignRequest & { customer_name: string; customer_email: string };
 export function listRequests(status?: string) {
   const sql = `SELECT r.*, u.name AS customer_name, u.email AS customer_email FROM requests r JOIN users u ON u.id = r.user_id`;
-  return (
+  return ((
     status
       ? db().prepare(`${sql} WHERE r.status = ? ORDER BY r.created_at ASC`).all(status)
       : db().prepare(`${sql} ORDER BY r.created_at DESC`).all()
-  ) as RequestWithCustomer[];
+  ) as RequestRow<RequestWithCustomer>[]).map(toRequest);
 }
 /** Minutes left on the one-hour quote promise (negative when overdue). */
 export function quoteMinutesLeft(r: DesignRequest): number {

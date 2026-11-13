@@ -10,6 +10,7 @@ const steps = [
 export default async function Home() {
   const user = await getUser();
   const start = user ? "/requests/new" : "/signup";
+  const print = user ? "/print" : "/signup?next=%2Fprint";
   return (
     <>
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-5 pt-14 pb-16 md:grid-cols-[1.15fr_1fr] md:pt-24">
@@ -32,9 +33,9 @@ export default async function Home() {
             <Link href={start} className="btn btn-coral px-7 py-3.5 text-base">
               Start a project
             </Link>
-            <a href="#how" className="btn btn-ghost px-7 py-3.5 text-base">
-              How it works
-            </a>
+            <Link href={print} className="btn btn-ghost px-7 py-3.5 text-base">
+              Print my 3D model
+            </Link>
           </div>
         </div>
 
@@ -75,7 +76,29 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-5 px-5 py-16 md:grid-cols-2">
+      <section className="mx-auto max-w-6xl px-5 pt-16">
+        <div className="card flex flex-wrap items-center justify-between gap-6 bg-mint shadow-[8px_8px_0_0_var(--color-ink)]">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold tracking-[0.14em] uppercase opacity-70">3D printing service</p>
+            <h2 className="mt-2 text-3xl font-extrabold sm:text-4xl">Already have a 3D model? We&apos;ll print it.</h2>
+            <p className="mt-3">
+              Upload your STL, 3MF, OBJ, or STEP file and pick your settings — resin or filament, material, color, layer resolution, infill,
+              supports. Get a price in about an hour, then choose Houston pickup, local delivery, or shipping.
+            </p>
+          </div>
+          <Link href={print} className="btn btn-coral px-7 py-3.5 text-base">
+            Print my model
+          </Link>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-5 pt-16">
+        <p className="eyebrow">Custom design</p>
+        <h2 className="mt-2 text-4xl font-extrabold">No model yet? We&apos;ll design it.</h2>
+        <p className="mt-2 max-w-2xl text-muted">Send us the idea and we build the 3D model. Then take it either way:</p>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-5 px-5 pt-6 pb-16 md:grid-cols-2">
         <div className="card bg-blue text-white">
           <p className="text-xs font-bold tracking-[0.14em] uppercase opacity-80">Option A</p>
           <h3 className="mt-2 text-3xl font-extrabold">Just the file</h3>

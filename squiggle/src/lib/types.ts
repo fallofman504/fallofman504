@@ -1,9 +1,15 @@
+import type { PrintSpec } from "./print-options";
+
 export type Role = "customer" | "admin";
 export type User = { id: string; email: string; name: string; phone: string | null; role: Role };
 
 export type RequestStatus = "submitted" | "quoted" | "ordered" | "closed";
 export type Intent = "stl" | "print" | "undecided";
+/** "custom": Squiggle designs it. "print_only": the customer supplied a finished model. */
+export type RequestKind = "custom" | "print_only";
 export type DesignRequest = {
+  kind: RequestKind;
+  print_spec: PrintSpec | null;
   id: string;
   ref: string;
   user_id: string;

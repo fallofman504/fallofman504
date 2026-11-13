@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fileSize } from "@/lib/format";
+import { PrintOptionsFields } from "./print-options";
 
 const INTENTS = [
   { value: "print", title: "Print it for me", body: "Squiggle makes it. Pickup, Houston delivery, or shipping." },
@@ -10,7 +11,13 @@ const INTENTS = [
   { value: "undecided", title: "Not sure yet", body: "Show me both prices and I'll decide." },
 ];
 
-export function NewRequestForm({ accept, maxFiles, maxBytes }: { accept: string; maxFiles: number; maxBytes: number }) {
+/**
+ * mode "custom": describe an idea and Squiggle designs it.
+ * mode "print": the customer already has a 3D model and only needs it printed.
+ */
+export function NewRequestForm({ mode, accept, maxFiles, maxBytes }: { mode: "custom" | "print"; accept: string; maxFiles: number; maxBytes: number }) {
+  const printOnly = mode === "print";
+  const [intent, setIntent] = useState("undecided");
   const router = useRouter();
   const picker = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -33,6 +40,7 @@ export function NewRequestForm({ accept, maxFiles, maxBytes }: { accept: string;
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    if (printOnly && files.length === 0) return setError("Attach the 3D model you want printed.");
     fd.delete("files");
     files.forEach((f) => fd.append("files", f));
     setBusy(true);
@@ -50,19 +58,22 @@ export function NewRequestForm({ accept, maxFiles, maxBytes }: { accept: string;
 
   return (
     <form onSubmit={submit} className="space-y-6">
+      <input type="hidden" name="kind" value={printOnly ? "print_only" : "custom"} />
       <div>
-        <label className="label" htmlFor="title">Project name</label>
-        <input className="input" id="title" name="title" maxLength={120} placeholder="Sleepy armadillo desk planter" required />
+        <label className="label" htmlFor="title">{printOnly ? "Name this print" : "Project name"}</label>
+        <input className="input" id="title" name="title" maxLength={120} placeholder={printOnly ? "Replacement dishwasher wheel" : "Sleepy armadillo desk planter"} required />
       </div>
 
-      <div>
-        <label className="label" htmlFor="prompt">What do you want to make?</label>
-        <textarea className="input min-h-36" id="prompt" name="prompt" maxLength={5000}
-          placeholder="Describe it like you'd tell a friend: what it is, roughly how big, what it's for, colors or materials you have in mind…" />
-      </div>
+      {!printOnly && (
+        <div>
+          <label className="label" htmlFor="prompt">What do you want to make?</label>
+          <textarea className="input min-h-36" id="prompt" name="prompt" maxLength={5000}
+            placeholder="Describe it like you'd tell a friend: what it is, roughly how big, what it's for, colors or materials you have in mind…" />
+        </div>
+      )}
 
       <div>
-        <span className="label">Photos, sketches, or 3D files <span className="font-normal text-muted">(optional)</span></span>
+        <span className="label">{printOnly ? "Your 3D model" : <>Photos, sketches, or 3D files <span className="font-normal text-muted">(optional)</span></>}</span>
         <div
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -70,7 +81,7 @@ export function NewRequestForm({ accept, maxFiles, maxBytes }: { accept: string;
           className={`rounded-2xl border-2 border-dashed p-6 text-center transition ${dragging ? "border-coral bg-coral/10" : "border-line bg-white"}`}
         >
           <p className="font-semibold">Drop files here</p>
-          <p className="mt-1 text-sm text-muted">Images, PDF, STL, OBJ, 3MF, STEP · up to {maxFiles} files, {fileSize(maxBytes)} each</p>
+          <p className="mt-1 text-sm text-muted">{printOnly ? "STL, 3MF, OBJ, or STEP" : "Images, PDF, STL, OBJ, 3MF, STEP"} · up to {maxFiles} files, {fileSize(maxBytes)} each</p>
           <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={() => picker.current?.click()}>Choose files</button>
           <input ref={picker} type="file" name="files" multiple accept={accept} className="hidden"
             onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
@@ -91,22 +102,49 @@ export function NewRequestForm({ accept, maxFiles, maxBytes }: { accept: string;
         )}
       </div>
 
-      <fieldset>
-        <legend className="label">What are you after?</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {INTENTS.map((o, i) => (
-            <label key={o.value} className="cursor-pointer rounded-2xl border-2 border-line bg-white p-4 transition has-checked:border-ink has-checked:bg-sun/40">
-              <input type="radio" name="intent" value={o.value} defaultChecked={i === 2} className="sr-only" />
-              <span className="block font-bold">{o.title}</span>
-              <span className="mt-1 block text-sm text-muted">{o.body}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {printOnly ? (
+        <>
+          <fieldset>
+            <legend className="mb-3 text-2xl font-bold">Print settings</legend>
+            <PrintOptionsFields />
+          </fieldset>
+          <div>
+            <label className="label" htmlFor="prompt">Anything we should know? <span className="font-normal text-muted">(optional)</span></label>
+            <textarea className="input min-h-24" id="prompt" name="prompt" maxLength={5000}
+              placeholder="Size or scale, which way up, parts that need to fit together, a deadline…" />
+          </div>
+        </>
+      ) : (
+        <>
+          <fieldset>
+            <legend className="label">What are you after?</legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {INTENTS.map((o) => (
+                <label key={o.value} className="cursor-pointer rounded-2xl border-2 border-line bg-white p-4 transition has-checked:border-ink has-checked:bg-sun/40">
+                  <input type="radio" name="intent" value={o.value} checked={intent === o.value} onChange={() => setIntent(o.value)} className="sr-only" />
+                  <span className="block font-bold">{o.title}</span>
+                  <span className="mt-1 block text-sm text-muted">{o.body}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {intent === "print" && (
+            <fieldset>
+              <legend className="mb-1 text-2xl font-bold">Print settings</legend>
+              <p className="mb-3 text-sm text-muted">We&apos;ll price your print with these. You can ask for changes after you see the quote.</p>
+              <PrintOptionsFields />
+            </fieldset>
+          )}
+        </>
+      )}
 
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn btn-coral px-7 py-3.5 text-base" disabled={busy}>{busy ? "Sending…" : "Send it to Squiggle"}</button>
-      <p className="text-sm text-muted">No payment now. You&apos;ll get a quote, render, and turntable video in about an hour.</p>
+      <button className="btn btn-coral px-7 py-3.5 text-base" disabled={busy}>{busy ? "Sending…" : printOnly ? "Get my print quote" : "Send it to Squiggle"}</button>
+      <p className="text-sm text-muted">
+        {printOnly
+          ? "No payment now. You'll get a price in about an hour, then choose pickup, delivery, or shipping."
+          : "No payment now. You'll get a quote, render, and turntable video in about an hour."}
+      </p>
     </form>
   );
 }

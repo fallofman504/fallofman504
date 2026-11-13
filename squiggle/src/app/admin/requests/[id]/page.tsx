@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminSetRequestStatus, adminUpdateOrder } from "@/app/actions";
 import { QuoteForm } from "@/components/quote-form";
-import { MessageForm, ReferenceFiles, Thread } from "@/components/request-view";
+import { MessageForm, PrintSpecCard, ReferenceFiles, Thread } from "@/components/request-view";
 import { OrderBadge, RequestBadge } from "@/components/status";
 import { SubmitButton } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
@@ -31,7 +31,7 @@ export default async function AdminRequest({ params }: { params: Promise<{ id: s
           <h1 className="text-4xl font-extrabold">{request.title}</h1>
           <p className="mt-1 text-sm text-muted">
             {request.ref} · {customer.name} · <a className="underline" href={`mailto:${customer.email}`}>{customer.email}</a>
-            {customer.phone && ` · ${customer.phone}`} · {dateTime(request.created_at)} · wants: {request.intent}
+            {customer.phone && ` · ${customer.phone}`} · {dateTime(request.created_at)} · {request.kind === "print_only" ? "print-only (customer's own model)" : `custom design, wants: ${request.intent}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -44,8 +44,15 @@ export default async function AdminRequest({ params }: { params: Promise<{ id: s
 
       {files.some((f) => f.kind === "reference") && (
         <section className="mt-8">
-          <h2 className="mb-3 text-lg font-bold">Reference files</h2>
+          <h2 className="mb-3 text-lg font-bold">{request.kind === "print_only" ? "Customer's model" : "Reference files"}</h2>
           <ReferenceFiles files={files.filter((f) => f.kind === "reference")} />
+        </section>
+      )}
+
+      {request.print_spec && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">Requested print settings</h2>
+          <PrintSpecCard spec={request.print_spec} />
         </section>
       )}
 

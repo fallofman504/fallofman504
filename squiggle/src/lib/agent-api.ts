@@ -2,6 +2,7 @@ import "server-only";
 import { getUser, isAgentRequest } from "./auth";
 import { findUser, listFiles, listMessages, listOrders, listQuotes } from "./data";
 import { appUrl } from "./payments";
+import { describePrintSpec } from "./print-options";
 import type { DesignRequest } from "./types";
 
 /** Back-end endpoints accept either the agents' API key or a signed-in admin. */
@@ -18,9 +19,12 @@ export function describeRequest(r: DesignRequest) {
   return {
     id: r.id,
     ref: r.ref,
+    kind: r.kind,
     title: r.title,
     prompt: r.prompt,
     intent: r.intent,
+    print_spec: r.print_spec,
+    print_spec_summary: r.print_spec && describePrintSpec(r.print_spec).map((row) => `${row.label}: ${row.value}`),
     status: r.status,
     created_at: new Date(r.created_at).toISOString(),
     quote_due_at: new Date(r.created_at + 3600_000).toISOString(),

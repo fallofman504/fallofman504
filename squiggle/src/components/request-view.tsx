@@ -1,5 +1,6 @@
 import { sendMessage } from "@/app/actions";
 import { dateTime, fileSize, money } from "@/lib/format";
+import { BRIM_NOTICE, describePrintSpec, type PrintSpec } from "@/lib/print-options";
 import type { FileRow, Message, Quote } from "@/lib/types";
 import { SubmitButton } from "./ui";
 
@@ -22,6 +23,22 @@ export function ReferenceFiles({ files }: { files: FileRow[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+export function PrintSpecCard({ spec }: { spec: PrintSpec }) {
+  return (
+    <div className="card-soft">
+      <dl className="grid gap-x-6 gap-y-1.5 text-[15px] sm:grid-cols-2">
+        {describePrintSpec(spec).map((row) => (
+          <div key={row.label} className="flex justify-between gap-4 border-b border-line/60 py-1">
+            <dt className="text-muted">{row.label}</dt>
+            <dd className="text-right font-medium">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-sm text-muted">{BRIM_NOTICE}</p>
+    </div>
   );
 }
 

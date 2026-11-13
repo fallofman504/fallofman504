@@ -114,6 +114,13 @@ CREATE TABLE IF NOT EXISTS password_resets (
 );
 `;
 
+/** Columns added after the first release; safe to run on every start. */
+function migrate(d: Database.Database) {
+  const has = (table: string, column: string) => (d.pragma(`table_info(${table})`) as { name: string }[]).some((c) => c.name === column);
+  if (!has("requests", "kind")) d.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'custom'");
+  if (!has("requests", "print_spec_json")) d.exec("ALTER TABLE requests ADD COLUMN print_spec_json TEXT");
+}
+
 const g = globalThis as unknown as { __squiggleDb?: Database.Database };
 
 export function db(): Database.Database {
@@ -123,6 +130,7 @@ export function db(): Database.Database {
     d.pragma("journal_mode = WAL");
     d.pragma("foreign_keys = ON");
     d.exec(SCHEMA);
+    migrate(d);
     g.__squiggleDb = d;
   }
   return g.__squiggleDb;

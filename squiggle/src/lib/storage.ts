@@ -34,6 +34,9 @@ const ALLOWED: Record<FileKind, string[]> = {
 
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_REFERENCE_FILES = 8;
+export const PRINTABLE_EXTENSIONS = ["stl", "3mf", "obj", "step", "stp"];
+export const PRINTABLE_ACCEPT = PRINTABLE_EXTENSIONS.map((e) => `.${e}`).join(",");
+export const isPrintable = (filename: string) => PRINTABLE_EXTENSIONS.includes(filename.split(".").pop()?.toLowerCase() ?? "");
 export const REFERENCE_ACCEPT = ALLOWED.reference.map((e) => `.${e}`).join(",");
 
 export class UploadError extends Error {}

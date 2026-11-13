@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cancelUnpaidOrder, payOrder, placeOrder } from "@/app/actions";
-import { MessageForm, ReferenceFiles, Thread } from "@/components/request-view";
+import { MessageForm, PrintSpecCard, ReferenceFiles, Thread } from "@/components/request-view";
 import { OrderBadge, RequestBadge } from "@/components/status";
 import { AutoRefresh, SubmitButton } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -50,16 +50,25 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         <div className="card mt-6 bg-sun/40">
           <h2 className="text-2xl font-bold">We&apos;re on it ✏️</h2>
           <p className="mt-1">
-            Your 3D model, price breakdown, render, and turntable video will show up right here — usually within an hour. This page updates on its
-            own, so feel free to leave it open.
+            {request.kind === "print_only"
+              ? "Your print price will show up right here — usually within an hour. Then you'll choose pickup, delivery, or shipping."
+              : "Your 3D model, price breakdown, render, and turntable video will show up right here — usually within an hour."}{" "}
+            This page updates on its own, so feel free to leave it open.
           </p>
         </div>
       )}
 
       {files.some((f) => f.kind === "reference") && (
         <section className="mt-8">
-          <h2 className="mb-3 text-lg font-bold">Your reference files</h2>
+          <h2 className="mb-3 text-lg font-bold">{request.kind === "print_only" ? "Your model" : "Your reference files"}</h2>
           <ReferenceFiles files={files.filter((f) => f.kind === "reference")} />
+        </section>
+      )}
+
+      {request.print_spec && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">Print settings</h2>
+          <PrintSpecCard spec={request.print_spec} />
         </section>
       )}
 

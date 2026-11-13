@@ -2,7 +2,8 @@
 
 Website for Squiggle, a 3D print and custom design/fabrication shop in Houston, TX.
 
-A customer creates an account and sends a text prompt and/or reference photos and 3D files. Squiggle's back-end agents
+There are two ways in. **Print my model**: the customer uploads a finished 3D model, picks print settings, and gets a
+print quote. **Custom design**: a customer creates an account and sends a text prompt and/or reference photos and 3D files. Squiggle's back-end agents
 build the model and post a quote (price breakdown, turntable video, render) into the customer's project thread. The
 customer then either buys the STL and downloads it, or orders a print with pickup, Houston delivery, or shipping —
 paying a 50% deposit up front and the balance at pickup or before it goes out.
@@ -38,6 +39,7 @@ Payments use Stripe Checkout. Each order creates one payment for an STL (full pr
 | `src/lib/data.ts` | All database reads/writes |
 | `src/lib/auth.ts` | Passwords, sessions, admin and agent checks |
 | `src/lib/payments.ts` | Stripe Checkout, simulated checkout, and what happens when a payment lands |
+| `src/lib/print-options.ts` | The print menu: materials, colors, layer heights, infill, supports, brim threshold. Edit to match the shop. |
 | `src/lib/storage.ts` | Upload validation and file storage |
 | `src/app/actions.ts` | Signup/login, messages, placing orders, admin order steps |
 | `src/app/api/agent/*` | API the back-end agents use — see [docs/AGENT_API.md](docs/AGENT_API.md) |

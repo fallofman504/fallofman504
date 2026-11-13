@@ -37,7 +37,7 @@ export default async function Admin() {
             <Link href={`/admin/requests/${r.id}`} className="card-soft flex flex-wrap items-center justify-between gap-3 hover:border-ink">
               <div className="min-w-0">
                 <p className="truncate text-lg font-bold">{r.title}</p>
-                <p className="text-sm text-muted">{r.ref} · {r.customer_name} · {dateTime(r.created_at)} · wants: {r.intent}</p>
+                <p className="text-sm text-muted">{r.ref} · {r.customer_name} · {dateTime(r.created_at)} · {r.kind === "print_only" ? "print-only" : `custom, wants: ${r.intent}`}</p>
               </div>
               <Due mins={quoteMinutesLeft(r)} />
             </Link>
