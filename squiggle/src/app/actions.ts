@@ -9,6 +9,7 @@ import {
 import { sendEmail } from "@/lib/email";
 import * as data from "@/lib/data";
 import { appUrl, markPaid, mockPaymentsAllowed, startCheckout } from "@/lib/payments";
+import { deleteStoredFiles } from "@/lib/storage";
 import type { Address, Fulfillment, Order, User } from "@/lib/types";
 
 export type FormState = { error?: string; notice?: string } | undefined;
@@ -199,6 +200,17 @@ export async function adminUpdateOrder(orderId: string, fd: FormData) {
     );
   }
   revalidatePath(`/admin/requests/${order.request_id}`);
+}
+
+/** Approve an agent's draft quote (sends it to the customer) or discard it. */
+export async function adminReviewDraft(quoteId: string, decision: "approve" | "discard") {
+  await requireAdmin();
+  const quote = data.getQuote(quoteId);
+  if (!quote || quote.status !== "draft") return;
+  if (decision === "approve") data.approveQuote(quote.id);
+  else deleteStoredFiles(data.discardDraftQuote(quote.id));
+  revalidatePath(`/admin/requests/${quote.request_id}`);
+  revalidatePath("/admin");
 }
 
 export async function adminSetRequestStatus(requestId: string, status: "closed" | "submitted") {

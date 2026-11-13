@@ -42,7 +42,7 @@ export function PrintSpecCard({ spec }: { spec: PrintSpec }) {
   );
 }
 
-export function QuoteCard({ quote, files, superseded }: { quote: Quote; files: FileRow[]; superseded?: boolean }) {
+export function QuoteCard({ quote, files, superseded, title }: { quote: Quote; files: FileRow[]; superseded?: boolean; title?: string }) {
   const mine = files.filter((f) => f.quote_id === quote.id);
   const video = mine.find((f) => f.kind === "turntable");
   const render = mine.find((f) => f.kind === "render");
@@ -69,7 +69,7 @@ export function QuoteCard({ quote, files, superseded }: { quote: Quote; files: F
       )}
       <div className="border-t-2 border-ink p-5">
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-xl font-bold">{superseded ? "Earlier quote" : "Your quote"}</h3>
+          <h3 className="text-xl font-bold">{title ?? (superseded ? "Earlier quote" : "Your quote")}</h3>
           {quote.lead_time_days != null && <span className="text-sm text-muted">Est. {quote.lead_time_days} day{quote.lead_time_days === 1 ? "" : "s"} to make</span>}
         </div>
         {quote.print_total_cents != null && (

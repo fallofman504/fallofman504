@@ -38,6 +38,7 @@ export const PROCESSES = {
     ],
     layers: [
       { id: "0.28", label: "Draft — 0.28 mm (fastest, visible layers)" },
+      { id: "0.24", label: "Fast — 0.24 mm" },
       { id: "0.20", label: "Standard — 0.20 mm" },
       { id: "0.12", label: "Fine — 0.12 mm" },
       { id: "0.08", label: "Extra fine — 0.08 mm (slowest, smoothest)" },

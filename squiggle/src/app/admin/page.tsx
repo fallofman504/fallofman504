@@ -2,7 +2,7 @@ import Link from "next/link";
 import { OrderBadge, RequestBadge } from "@/components/status";
 import { AutoRefresh } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
-import { listActiveOrders, listRequests, paidAmount, quoteMinutesLeft } from "@/lib/data";
+import { listActiveOrders, listRequests, paidAmount, quoteMinutesLeft, requestIdsWithDrafts } from "@/lib/data";
 import { dateTime, money } from "@/lib/format";
 import { FULFILLMENT_LABEL } from "@/lib/types";
 
@@ -19,15 +19,36 @@ function Due({ mins }: { mins: number }) {
 export default async function Admin() {
   await requireAdmin();
   const all = listRequests();
-  const waiting = all.filter((r) => r.status === "submitted").reverse();
+  const drafted = requestIdsWithDrafts();
+  const toApprove = all.filter((r) => drafted.has(r.id) && r.status !== "closed").reverse();
+  const waiting = all.filter((r) => r.status === "submitted" && !drafted.has(r.id)).reverse();
   const orders = listActiveOrders();
-  const rest = all.filter((r) => r.status !== "submitted");
+  const rest = all.filter((r) => r.status !== "submitted" && !toApprove.includes(r));
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-10">
       <AutoRefresh seconds={30} />
       <p className="eyebrow">Squiggle shop</p>
       <h1 className="mt-2 text-4xl font-extrabold">Shop queue</h1>
+
+      {toApprove.length > 0 && (
+        <>
+          <h2 className="mt-10 mb-3 text-2xl font-bold">Drafts to approve <span className="text-muted">({toApprove.length})</span></h2>
+          <ul className="space-y-3">
+            {toApprove.map((r) => (
+              <li key={r.id}>
+                <Link href={`/admin/requests/${r.id}`} className="card-soft flex flex-wrap items-center justify-between gap-3 border-ink bg-sun/40 hover:border-ink">
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-bold">{r.title}</p>
+                    <p className="text-sm text-muted">{r.ref} · {r.customer_name} · {dateTime(r.created_at)} · agent quote ready to review</p>
+                  </div>
+                  {r.status === "submitted" ? <Due mins={quoteMinutesLeft(r)} /> : <span className="badge bg-sun/50">Revised quote</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2 className="mt-10 mb-3 text-2xl font-bold">Needs a quote <span className="text-muted">({waiting.length})</span></h2>
       {waiting.length === 0 && <p className="card-soft text-muted">All caught up — no requests waiting.</p>}

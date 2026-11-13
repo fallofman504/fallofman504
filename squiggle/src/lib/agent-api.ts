@@ -1,6 +1,6 @@
 import "server-only";
 import { getUser, isAgentRequest } from "./auth";
-import { findUser, listFiles, listMessages, listOrders, listQuotes } from "./data";
+import { findUser, listDraftQuotes, listFiles, listMessages, listOrders, listQuotes } from "./data";
 import { appUrl } from "./payments";
 import { describePrintSpec } from "./print-options";
 import type { DesignRequest } from "./types";
@@ -39,6 +39,7 @@ export function describeRequest(r: DesignRequest) {
     })),
     messages: listMessages(r.id).map((m) => ({ sender: m.sender, body: m.body, at: new Date(m.created_at).toISOString() })),
     quotes: listQuotes(r.id),
+    draft_quotes: listDraftQuotes(r.id),
     orders: listOrders(r.id).map((o) => ({ ref: o.ref, type: o.type, status: o.status, fulfillment: o.fulfillment, total_cents: o.total_cents })),
   };
 }

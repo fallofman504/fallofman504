@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminSetRequestStatus, adminUpdateOrder } from "@/app/actions";
+import { adminReviewDraft, adminSetRequestStatus, adminUpdateOrder } from "@/app/actions";
 import { QuoteForm } from "@/components/quote-form";
-import { MessageForm, PrintSpecCard, ReferenceFiles, Thread } from "@/components/request-view";
+import { MessageForm, PrintSpecCard, QuoteCard, ReferenceFiles, Thread } from "@/components/request-view";
 import { OrderBadge, RequestBadge } from "@/components/status";
 import { SubmitButton } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
-import { findUser, getRequest, listFiles, listMessages, listOrders, listPayments, listQuotes } from "@/lib/data";
+import { findUser, getRequest, listFiles, listMessages, listOrders, listDraftQuotes, listPayments, listQuotes } from "@/lib/data";
 import { dateTime, money } from "@/lib/format";
 import { FULFILLMENT_LABEL, type Order } from "@/lib/types";
 
@@ -20,6 +20,7 @@ export default async function AdminRequest({ params }: { params: Promise<{ id: s
   const customer = findUser(request.user_id)!;
   const files = listFiles(id);
   const quotes = listQuotes(id);
+  const drafts = listDraftQuotes(id);
   const orders = listOrders(id);
   const closed = request.status === "closed";
 
@@ -56,15 +57,36 @@ export default async function AdminRequest({ params }: { params: Promise<{ id: s
         </section>
       )}
 
+      {drafts.map((d) => (
+        <section key={d.id} className="card mt-8 bg-sun/40">
+          <p className="eyebrow">Needs your approval</p>
+          <h2 className="mt-1 mb-1 text-2xl font-bold">Draft quote from your agents</h2>
+          <p className="mb-4 text-sm">The customer can&apos;t see this yet. Approve it to send it as-is, or discard it and send your own below.</p>
+          {d.note && <p className="mb-3 rounded-2xl border border-line bg-white px-4 py-3 text-[15px] whitespace-pre-wrap">{d.note}</p>}
+          <QuoteCard quote={d} files={files} title="Draft quote" />
+          {files.filter((f) => f.kind === "model" && f.quote_id === d.id).map((f) => (
+            <p key={f.id} className="mt-3 text-sm">Model file: <a className="font-semibold underline" href={`/api/files/${f.id}`}>{f.filename}</a></p>
+          ))}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <form action={adminReviewDraft.bind(null, d.id, "approve")}>
+              <SubmitButton className="btn btn-coral" pendingText="Sending…">Approve &amp; send to customer</SubmitButton>
+            </form>
+            <form action={adminReviewDraft.bind(null, d.id, "discard")}>
+              <SubmitButton className="btn btn-ghost" pendingText="Discarding…">Discard draft</SubmitButton>
+            </form>
+          </div>
+        </section>
+      ))}
+
       {orders.map((o) => <AdminOrder key={o.id} order={o} />)}
 
       <section className="mt-10">
         <h2 className="mb-4 text-lg font-bold">Conversation</h2>
         <Thread messages={listMessages(id)} quotes={quotes} files={files} viewer="squiggle" />
-        {files.filter((f) => f.kind === "model").length > 0 && (
+        {files.filter((f) => f.kind === "model" && !drafts.some((d) => d.id === f.quote_id)).length > 0 && (
           <p className="mt-4 text-sm text-muted">
             Model files:{" "}
-            {files.filter((f) => f.kind === "model").map((f) => (
+            {files.filter((f) => f.kind === "model" && !drafts.some((d) => d.id === f.quote_id)).map((f) => (
               <a key={f.id} className="mr-3 font-semibold text-ink underline" href={`/api/files/${f.id}`}>{f.filename}</a>
             ))}
           </p>

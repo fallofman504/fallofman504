@@ -77,3 +77,7 @@ export async function saveUpload(file: File, opts: { requestId: string; kind: Fi
 export function filePath(id: string): string {
   return path.join(UPLOAD_DIR, path.basename(id));
 }
+
+export function deleteStoredFiles(ids: string[]) {
+  for (const id of ids) fs.rmSync(filePath(id), { force: true });
+}
