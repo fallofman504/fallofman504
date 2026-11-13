@@ -43,6 +43,11 @@ Payments use Stripe Checkout. Each order creates one payment for an STL (full pr
 | `src/app/api/agent/*` | API the back-end agents use — see [docs/AGENT_API.md](docs/AGENT_API.md) |
 | `src/app/api/files/[id]` | Access-controlled file serving (the model is locked until the STL is paid for) |
 
+## Hosting
+
+[docs/DEPLOY.md](docs/DEPLOY.md) covers self-hosting on a small Linux server or Raspberry Pi behind a Cloudflare
+Tunnel: `sudo ./deploy/setup.sh` installs and starts everything, with nightly backups.
+
 Data lives in `./data` (SQLite file + uploads), or wherever `DATA_DIR` points. Host it somewhere with a persistent
 disk (a VPS, Fly.io, Railway, Render); serverless hosts like Vercel would need the database and file storage swapped
 for hosted services first.
