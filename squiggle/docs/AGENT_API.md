@@ -67,7 +67,7 @@ me". Price the print to these settings.
 ```
 
 The full menu of allowed values lives in `src/lib/print-options.ts`. Parts under the brim threshold in that file
-(25 mm) get a brim automatically; customers are told this when they choose settings.
+(0.5 inch / 12.7 mm) get a brim automatically; customers are told this when they choose settings.
 
 ## 2. Ask the customer a question (optional)
 

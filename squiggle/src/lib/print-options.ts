@@ -18,9 +18,9 @@ type Process = {
   fuzzySkin: Option[] | null;
 };
 
-/** Parts smaller than this (longest side on the bed, in mm) automatically get a brim. */
-export const BRIM_THRESHOLD_MM = 25;
-export const BRIM_NOTICE = `Small parts — anything under ${BRIM_THRESHOLD_MM} mm (about ${Math.round(BRIM_THRESHOLD_MM / 25.4)} in) — automatically get a brim added for print stability.`;
+/** Parts smaller than this (longest side on the bed, in inches) automatically get a brim. */
+export const BRIM_THRESHOLD_IN = 0.5;
+export const BRIM_NOTICE = `Small parts — anything under ${BRIM_THRESHOLD_IN} inch (${(BRIM_THRESHOLD_IN * 25.4).toFixed(1)} mm) — automatically get a brim added for print stability.`;
 
 export const MAX_QUANTITY = 100;
 
