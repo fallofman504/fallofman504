@@ -17,13 +17,13 @@ Cloudflare Tunnel, so no ports are opened on your router and your IP address sta
 
 ## 1. Create the tunnel (in Cloudflare, about 5 minutes)
 
-1. Go to **dash.cloudflare.com → Zero Trust → Networks → Tunnels → Create a tunnel**.
-2. Choose **Cloudflared**, name it `squiggle`, and save.
-3. On the install screen, copy the long token (the text after `--token` in the command shown). You don't need to run
-   that command; the setup script runs the tunnel for you.
-4. Under **Public Hostname**, add one:
-   - **Domain:** your domain (leave subdomain blank, or use `www`)
-   - **Service:** `HTTP` → `app:3000`
+1. In the Cloudflare dashboard go to **Networking → Tunnels** and select **Create a tunnel**.
+2. Name it `squiggle` and select **Create Tunnel**.
+3. Cloudflare shows an installation command. Copy the long token from it (the text after `--token`). You don't need
+   to run that command; the setup script runs the tunnel for you. Treat the token like a password.
+4. Open the tunnel, go to the **Routes** tab, and select **Add route → Published application**:
+   - **Subdomain:** leave blank &nbsp; **Domain:** your domain
+   - **Service URL:** `http://app:3000`
 
 ## 2. Run the setup script
 

@@ -56,7 +56,7 @@ ask ADMIN_EMAILS "Email(s) that get the Shop queue, comma-separated" ""
 ask SQUIGGLE_DATA_DIR "Folder for the database and uploaded files (e.g. on your SSD)" "$APP_DIR/data"
 ask BACKUP_DIR "Folder for local backup copies (ideally a different drive)" "$APP_DIR/backups"
 echo
-echo "Cloudflare Tunnel token: dash.cloudflare.com -> Zero Trust -> Networks -> Tunnels -> Create a tunnel."
+echo "Cloudflare Tunnel token: dash.cloudflare.com -> Networking -> Tunnels -> your tunnel's install command (after --token)."
 echo "(Step-by-step in docs/DEPLOY.md.)"
 ask_secret CLOUDFLARE_TUNNEL_TOKEN "Tunnel token"
 [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] || { echo "A tunnel token is required."; exit 1; }
@@ -160,7 +160,7 @@ cat <<DONE
 
 Squiggle is running.
 
-  Site:          https://$DOMAIN   (once the tunnel's public hostname points at http://app:3000)
+  Site:          https://$DOMAIN   (once the tunnel has a route for your domain to http://app:3000)
   Shop queue:    sign up on the site with one of: $ADMIN_EMAILS
   Agent API key: stored in $APP_DIR/.env (AGENT_API_KEY)
   Backups:       nightly at 3:15 AM into $BACKUP_DIR$( [ -n "$BACKUP_REMOTE" ] && echo " and $BACKUP_REMOTE" || echo "  (off-site copy NOT set up yet — see docs/DEPLOY.md)")
