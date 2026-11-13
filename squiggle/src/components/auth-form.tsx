@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { login, signup } from "@/app/actions";
-import { SubmitButton } from "./ui";
+import { PasswordInput, SubmitButton } from "./ui";
 
 export function AuthForm({ mode, next, notice }: { mode: "login" | "signup"; next?: string; notice?: string }) {
   const [state, action] = useActionState(mode === "login" ? login : signup, undefined);
@@ -34,7 +34,7 @@ export function AuthForm({ mode, next, notice }: { mode: "login" | "signup"; nex
         )}
         <div>
           <label className="label" htmlFor="password">Password</label>
-          <input className="input" id="password" name="password" type="password" minLength={mode === "signup" ? 8 : undefined}
+          <PasswordInput id="password" name="password" minLength={mode === "signup" ? 8 : undefined}
             autoComplete={mode === "login" ? "current-password" : "new-password"} required />
         </div>
         {notice && !state?.error && <p className="notice" role="status">{notice}</p>}

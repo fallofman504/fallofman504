@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { choosePassword, requestPasswordReset } from "@/app/actions";
-import { SubmitButton } from "./ui";
+import { PasswordInput, SubmitButton } from "./ui";
 
 export function ForgotPasswordForm() {
   const [state, action] = useActionState(requestPasswordReset, undefined);
@@ -28,11 +28,11 @@ export function ChoosePasswordForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
       <div>
         <label className="label" htmlFor="password">New password</label>
-        <input className="input" id="password" name="password" type="password" minLength={8} autoComplete="new-password" required />
+        <PasswordInput id="password" name="password" minLength={8} autoComplete="new-password" required />
       </div>
       <div>
         <label className="label" htmlFor="confirm">Type it again</label>
-        <input className="input" id="confirm" name="confirm" type="password" minLength={8} autoComplete="new-password" required />
+        <PasswordInput id="confirm" name="confirm" minLength={8} autoComplete="new-password" required />
       </div>
       {state?.error && <p className="error" role="alert">{state.error}</p>}
       <SubmitButton className="btn btn-coral w-full py-3">Save new password</SubmitButton>
