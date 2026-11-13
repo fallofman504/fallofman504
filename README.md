@@ -4,6 +4,8 @@ I build personal projects and keep my notes and configs here.
 
 ## Projects
 
+- [squiggle](squiggle): website for Squiggle, a 3D print and custom fabrication shop in Houston, TX
+
 <!-- Add a line for each project you want people to see, e.g.
 - [project-name](https://github.com/fallofman504/project-name): what it does in one sentence
 -->
