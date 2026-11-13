@@ -122,6 +122,17 @@ export default async function Home() {
           </Link>
         </div>
       </section>
+
+      <section className="mx-auto mt-12 flex max-w-6xl justify-center px-5">
+        <p className="-rotate-1 rounded-full border-2 border-ink bg-card px-6 py-3 text-center font-display text-xl font-extrabold shadow-[4px_4px_0_0_var(--color-ink)]">
+          <span className="mr-2 inline-flex gap-1 align-middle" aria-hidden>
+            {["bg-coral", "bg-sun", "bg-mint", "bg-blue"].map((c) => (
+              <span key={c} className={`h-3.5 w-3.5 rounded-full border-2 border-ink ${c}`} />
+            ))}
+          </span>
+          Full-color Prints, coming soon!
+        </p>
+      </section>
     </>
   );
 }

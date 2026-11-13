@@ -24,16 +24,17 @@ export const BRIM_NOTICE = `Small parts — anything under ${BRIM_THRESHOLD_MM} 
 
 export const MAX_QUANTITY = 100;
 
-const FILAMENT_COLORS = ["Black", "White", "Gray", "Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Pink"];
+const FILAMENT_COLORS = ["Black", "White", "Gray", "Red", "Blue", "Yellow", "Green"];
+const RESIN_COLORS = ["White", "Gray"];
 
 export const PROCESSES = {
   filament: {
     label: "Filament (FDM)",
     materials: [
-      { id: "pla", label: "PLA — everyday prints, widest color range", colors: [...FILAMENT_COLORS, "Silk gold", "Silk silver", "Glow in the dark"] },
-      { id: "petg", label: "PETG — tougher, handles heat and moisture", colors: ["Black", "White", "Gray", "Red", "Blue", "Clear"] },
-      { id: "abs", label: "ABS / ASA — heat and outdoor resistant", colors: ["Black", "White", "Gray"] },
-      { id: "tpu", label: "TPU — flexible, rubber-like", colors: ["Black", "White", "Red", "Blue"] },
+      { id: "pla", label: "PLA — everyday prints", colors: FILAMENT_COLORS },
+      { id: "petg", label: "PETG — tougher, handles heat and moisture", colors: FILAMENT_COLORS },
+      { id: "abs", label: "ABS / ASA — heat and outdoor resistant", colors: FILAMENT_COLORS },
+      { id: "tpu", label: "TPU — flexible, rubber-like", colors: FILAMENT_COLORS },
     ],
     layers: [
       { id: "0.28", label: "Draft — 0.28 mm (fastest, visible layers)" },
@@ -66,10 +67,9 @@ export const PROCESSES = {
   resin: {
     label: "Resin (SLA)",
     materials: [
-      { id: "standard", label: "Standard resin — fine detail", colors: ["Gray", "Black", "White"] },
-      { id: "tough", label: "Tough resin — ABS-like strength", colors: ["Gray", "Black"] },
-      { id: "clear", label: "Clear resin — translucent", colors: ["Clear"] },
-      { id: "flexible", label: "Flexible resin — rubber-like", colors: ["Black"] },
+      { id: "standard", label: "Standard resin — fine detail", colors: RESIN_COLORS },
+      { id: "tough", label: "Tough resin — ABS-like strength", colors: RESIN_COLORS },
+      { id: "flexible", label: "Flexible resin — rubber-like", colors: RESIN_COLORS },
     ],
     layers: [
       { id: "0.10", label: "Draft — 0.10 mm" },
