@@ -1,0 +1,22 @@
+# Squiggle production stack: the website plus the Cloudflare Tunnel that makes it reachable.
+# Nothing here opens a port to the internet; all traffic arrives through the tunnel.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ${SQUIGGLE_DATA_DIR:-./data}:/data
+    ports:
+      - "127.0.0.1:3000:3000" # reachable from the server itself only, for troubleshooting
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
