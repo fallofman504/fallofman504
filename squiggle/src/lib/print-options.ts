@@ -70,6 +70,7 @@ export const PROCESSES = {
       { id: "standard", label: "Standard resin — fine detail", colors: RESIN_COLORS },
       { id: "tough", label: "Tough resin — ABS-like strength", colors: RESIN_COLORS },
       { id: "flexible", label: "Flexible resin — rubber-like", colors: RESIN_COLORS },
+      { id: "clear", label: "Clear resin — translucent", colors: ["Clear (uncolored)"] },
     ],
     layers: [
       { id: "0.10", label: "Draft — 0.10 mm" },
