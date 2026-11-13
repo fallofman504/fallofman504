@@ -63,6 +63,9 @@ html {
   .eyebrow {
     @apply text-xs font-bold tracking-[0.14em] text-coral-dark uppercase;
   }
+  .notice {
+    @apply rounded-xl border border-ink/20 bg-mint/60 px-3.5 py-2.5 text-sm font-medium;
+  }
   .error {
     @apply rounded-xl border border-coral bg-coral/10 px-3.5 py-2.5 text-sm font-medium text-coral-dark;
   }

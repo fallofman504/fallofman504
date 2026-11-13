@@ -19,7 +19,7 @@ case "$(uname -m)" in
 esac
 
 # ---------- helpers ----------
-current() { [ -f .env ] && grep -E "^$1=" .env | head -1 | cut -d= -f2- || true; }
+current() { [ -f .env ] && grep -E "^$1=" .env | head -1 | cut -d= -f2- | sed 's/^"\(.*\)"$/\1/' || true; }
 ask() { # ask VAR "Question" "default"
   local existing answer
   existing=$(current "$1")
@@ -65,9 +65,39 @@ echo "Stripe keys are optional for now. Without them the site shows but can't ta
 ask_secret STRIPE_SECRET_KEY "Stripe secret key (sk_...)"
 ask_secret STRIPE_WEBHOOK_SECRET "Stripe webhook signing secret (whsec_...)"
 
+echo
+echo "Off-site backups to Cloudflare R2 (free up to 10 GB). Leave the Account ID blank to skip for now."
+echo "Where to find these: docs/DEPLOY.md, step 3."
+BACKUP_REMOTE=$(current BACKUP_REMOTE)
+if [ -n "$BACKUP_REMOTE" ]; then
+  echo "Already set up: $BACKUP_REMOTE (edit .env to change it)"
+else
+  ask R2_ACCOUNT_ID "Cloudflare Account ID" ""
+  if [ -n "$R2_ACCOUNT_ID" ]; then
+    ask R2_BUCKET "R2 bucket name" "squiggle-backups"
+    ask_secret R2_ACCESS_KEY_ID "R2 Access Key ID"
+    ask_secret R2_SECRET_ACCESS_KEY "R2 Secret Access Key"
+    rclone config create r2 s3 provider=Cloudflare access_key_id="$R2_ACCESS_KEY_ID" secret_access_key="$R2_SECRET_ACCESS_KEY" \
+      endpoint="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" acl=private no_check_bucket=true >/dev/null
+    chmod 600 /root/.config/rclone/rclone.conf 2>/dev/null || true
+    BACKUP_REMOTE="r2:$R2_BUCKET"
+  fi
+fi
+echo
+echo "Outgoing email, used for password reset links. Leave the server blank to skip for now"
+echo "(reset links are then written to the site log instead of emailed)."
+ask SMTP_HOST "SMTP server (e.g. smtp.resend.com)" ""
+if [ -n "$SMTP_HOST" ]; then
+  ask SMTP_PORT "SMTP port" "587"
+  ask SMTP_USER "SMTP username" ""
+  ask_secret SMTP_PASS "SMTP password"
+  ask EMAIL_FROM "From address" "Squiggle <hello@$DOMAIN>"
+else
+  SMTP_PORT=587 SMTP_USER="" SMTP_PASS="" EMAIL_FROM=""
+fi
+
 AGENT_API_KEY=$(current AGENT_API_KEY)
 [ -n "$AGENT_API_KEY" ] && [ "$AGENT_API_KEY" != "change-me-to-a-long-random-string" ] || AGENT_API_KEY=$(openssl rand -hex 32)
-BACKUP_REMOTE=$(current BACKUP_REMOTE)
 
 # ---------- 3. write settings ----------
 umask 077
@@ -83,6 +113,12 @@ SQUIGGLE_DATA_DIR=$SQUIGGLE_DATA_DIR
 BACKUP_DIR=$BACKUP_DIR
 # Off-site backups: an rclone destination such as r2:squiggle-backups (see docs/DEPLOY.md)
 BACKUP_REMOTE=$BACKUP_REMOTE
+# Outgoing email
+SMTP_HOST=$SMTP_HOST
+SMTP_PORT=$SMTP_PORT
+SMTP_USER=$SMTP_USER
+SMTP_PASS=$SMTP_PASS
+EMAIL_FROM="$EMAIL_FROM"
 ENV
 chmod 600 .env
 umask 022
@@ -106,6 +142,10 @@ echo
 
 # ---------- 5. backups + security updates ----------
 chmod +x deploy/backup.sh deploy/update.sh
+if [ -n "$BACKUP_REMOTE" ] && [ -f "$SQUIGGLE_DATA_DIR/squiggle.db" ]; then
+  echo "==> Running a first backup to check the off-site copy works"
+  ./deploy/backup.sh || echo "!! The test backup failed. Check the R2 details in docs/DEPLOY.md, then run: sudo ./deploy/backup.sh"
+fi
 cat > /etc/cron.d/squiggle-backup <<CRON
 # Nightly Squiggle backup at 3:15 AM
 15 3 * * * root $APP_DIR/deploy/backup.sh >> /var/log/squiggle-backup.log 2>&1

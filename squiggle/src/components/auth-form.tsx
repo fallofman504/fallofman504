@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { login, signup } from "@/app/actions";
 import { SubmitButton } from "./ui";
 
-export function AuthForm({ mode, next }: { mode: "login" | "signup"; next?: string }) {
+export function AuthForm({ mode, next, notice }: { mode: "login" | "signup"; next?: string; notice?: string }) {
   const [state, action] = useActionState(mode === "login" ? login : signup, undefined);
   const q = next ? `?next=${encodeURIComponent(next)}` : "";
   return (
@@ -37,8 +37,12 @@ export function AuthForm({ mode, next }: { mode: "login" | "signup"; next?: stri
           <input className="input" id="password" name="password" type="password" minLength={mode === "signup" ? 8 : undefined}
             autoComplete={mode === "login" ? "current-password" : "new-password"} required />
         </div>
+        {notice && !state?.error && <p className="notice" role="status">{notice}</p>}
         {state?.error && <p className="error" role="alert">{state.error}</p>}
         <SubmitButton className="btn btn-coral w-full py-3">{mode === "login" ? "Log in" : "Create account"}</SubmitButton>
+        {mode === "login" && (
+          <Link href="/forgot-password" className="btn btn-ghost w-full py-3">Forgot password?</Link>
+        )}
       </form>
       <p className="mt-5 text-center text-sm text-muted">
         {mode === "login" ? (

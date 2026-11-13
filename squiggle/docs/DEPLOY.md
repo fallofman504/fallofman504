@@ -45,22 +45,33 @@ an answer; it keeps your existing values as the defaults.
 
 When it finishes, open `https://your-domain` and sign up with your admin email.
 
-## 3. Turn on off-site backups
+## 3. Turn on off-site backups (Cloudflare R2)
 
-The nightly backup saves one archive (database + uploaded files) into your backup folder and keeps 14 days. Until you
-do this step, those copies exist only at the same location as the server.
+Every night the server saves one full archive (database + uploaded files) into your backup folder and keeps 14 days.
+Until you do this step, those copies exist only at the same location as the server.
 
-Cloudflare R2 works well and is free for the first 10 GB:
+Cloudflare R2 is free for the first 10 GB. In the Cloudflare dashboard:
 
-1. In Cloudflare: **R2 → Create bucket** named `squiggle-backups`, then **Manage R2 API Tokens → Create API token**
-   with *Object Read & Write* on that bucket. Note the Access Key ID, Secret Access Key, and your account's S3 endpoint.
-2. On the server, run `sudo rclone config` and create a remote named `r2`: type **s3**, provider **Cloudflare**, then
-   paste the key, secret, and endpoint.
-3. Edit `.env` and set `BACKUP_REMOTE=r2:squiggle-backups`.
-4. Test it: `sudo ./deploy/backup.sh` — the last line should say "copied off-site".
+1. **R2 → Create bucket**, named `squiggle-backups`. (R2 asks for a card on file even on the free allowance.)
+2. **R2 → Manage R2 API Tokens → Create API token**, permission *Object Read & Write*, limited to that bucket.
+   Copy the **Access Key ID** and **Secret Access Key** — they are shown only once.
+3. Copy your **Account ID** from the R2 overview page.
 
-Run rclone config with `sudo` so the nightly job, which runs as root, can find it. Any other rclone destination
-(Backblaze B2, Google Drive, another computer) works the same way.
+Then run `sudo ./deploy/setup.sh` again (or answer these the first time through). It asks for the Account ID, bucket
+name, and the two keys, connects the server to R2, and runs a test backup. The last line should say
+"copied off-site".
+
+Off-site, each uploaded file is stored once and a small database snapshot is added nightly (kept 30 days), so it
+uses far less space than the local archives. The backup log warns you if R2 usage passes 8 GB.
+
+## 4. Turn on email (password reset links)
+
+"Forgot password?" emails a reset link, which needs an email-sending account. Any SMTP provider works (Resend,
+Postmark, Amazon SES, and others have free tiers); they will have you add a few DNS records for your domain in
+Cloudflare. Re-run `sudo ./deploy/setup.sh` and enter the SMTP server, port, username, password, and From address.
+
+Until this is set up, reset emails are written to the site log instead of sent. If a customer is locked out in the
+meantime, you can find their link with `docker compose logs app | grep reset-password` and pass it along.
 
 ## Restoring from a backup
 
@@ -70,6 +81,16 @@ sudo tar -xzf /path/to/squiggle-2026-11-13_0315.tar.gz -C /path/to/data-folder  
 sudo rm -f /path/to/data-folder/squiggle.db-wal /path/to/data-folder/squiggle.db-shm
 sudo chown -R 1000:1000 /path/to/data-folder
 docker compose up -d
+```
+
+If the server itself is lost, rebuild the data folder from R2 instead:
+
+```bash
+sudo rclone copy r2:squiggle-backups/uploads /path/to/data-folder/uploads
+sudo rclone lsf r2:squiggle-backups/db | tail -1                      # newest snapshot's name
+sudo rclone copy r2:squiggle-backups/db/<that-name> /tmp/
+gunzip -c /tmp/<that-name> | sudo tee /path/to/data-folder/squiggle.db > /dev/null
+sudo chown -R 1000:1000 /path/to/data-folder
 ```
 
 Try a restore once before you launch, so you know the backups work.

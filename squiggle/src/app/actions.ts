@@ -2,12 +2,16 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { endSession, hashPassword, requireAdmin, requireUser, roleForEmail, safeNext, startSession, verifyPassword } from "@/lib/auth";
+import {
+  clearLoginFailures, createPasswordReset, endSession, hashPassword, loginPauseMinutes, LOGIN_PAUSE_MINUTES, MAX_LOGIN_FAILS,
+  recordLoginFailure, requireAdmin, requireUser, RESET_LINK_MINUTES, resetPassword, roleForEmail, safeNext, startSession, verifyPassword,
+} from "@/lib/auth";
+import { sendEmail } from "@/lib/email";
 import * as data from "@/lib/data";
-import { markPaid, mockPaymentsAllowed, startCheckout } from "@/lib/payments";
+import { appUrl, markPaid, mockPaymentsAllowed, startCheckout } from "@/lib/payments";
 import type { Address, Fulfillment, Order, User } from "@/lib/types";
 
-export type FormState = { error?: string } | undefined;
+export type FormState = { error?: string; notice?: string } | undefined;
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
 // ---------- accounts ----------
@@ -24,13 +28,46 @@ export async function signup(_: FormState, fd: FormData): Promise<FormState> {
 
 export async function login(_: FormState, fd: FormData): Promise<FormState> {
   const email = str(fd, "email").toLowerCase(), password = String(fd.get("password") ?? "");
+  const paused = loginPauseMinutes(email);
+  if (paused) return { error: `Too many failed attempts. Login is paused for ${paused} more minute${paused === 1 ? "" : "s"}. You can reset your password below.` };
   const user = data.findUserByEmail(email);
-  if (!user || !verifyPassword(password, user.password_hash)) return { error: "Wrong email or password." };
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    const fails = recordLoginFailure(email);
+    if (fails >= MAX_LOGIN_FAILS) return { error: `Too many failed attempts. Login is paused for ${LOGIN_PAUSE_MINUTES} minutes. You can reset your password below.` };
+    if (fails === MAX_LOGIN_FAILS - 1) return { error: `Wrong email or password. One more failed attempt will pause login for ${LOGIN_PAUSE_MINUTES} minutes.` };
+    return { error: "Wrong email or password." };
+  }
+  clearLoginFailures(email);
   const role = roleForEmail(email);
   if (role === "admin" && user.role !== "admin") data.setUserRole(user.id, "admin");
   await startSession(user.id);
   const next = safeNext(fd.get("next"));
   redirect(role === "admin" && next === "/dashboard" ? "/admin" : next);
+}
+
+export async function requestPasswordReset(_: FormState, fd: FormData): Promise<FormState> {
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "That email doesn't look right." };
+  const user = data.findUserByEmail(email);
+  const token = user && createPasswordReset(user.id);
+  if (user && token) {
+    const link = `${appUrl()}/reset-password?token=${token}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your Squiggle password",
+      text: `Hi ${user.name},\n\nUse this link to choose a new password. It works once and expires in ${RESET_LINK_MINUTES} minutes:\n\n${link}\n\nIf you didn't ask for this, you can ignore this email — your password hasn't changed.\n\n— Squiggle`,
+    });
+  }
+  // Same answer whether or not the account exists, so this form can't be used to find out who has one.
+  return { notice: `If there's an account for ${email}, a reset link is on its way. It expires in ${RESET_LINK_MINUTES} minutes.` };
+}
+
+export async function choosePassword(_: FormState, fd: FormData): Promise<FormState> {
+  const password = String(fd.get("password") ?? "");
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== String(fd.get("confirm") ?? "")) return { error: "Those passwords don't match." };
+  if (!resetPassword(str(fd, "token"), password)) return { error: "This reset link has expired or was already used. Request a new one." };
+  redirect("/login?reset=1");
 }
 
 export async function logout() {

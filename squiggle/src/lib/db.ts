@@ -100,6 +100,18 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS payments_order ON payments(order_id);
+CREATE TABLE IF NOT EXISTS login_attempts (
+  email TEXT PRIMARY KEY COLLATE NOCASE,
+  fails INTEGER NOT NULL,
+  last_failed_at INTEGER NOT NULL,
+  locked_until INTEGER
+);
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
 `;
 
 const g = globalThis as unknown as { __squiggleDb?: Database.Database };
