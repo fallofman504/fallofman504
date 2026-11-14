@@ -8,14 +8,89 @@ const steps = [
 ];
 
 /** A printed object drawn as stacked layers. */
-function Layers({ count = 34, className = "" }: { count?: number; className?: string }) {
+function Layers({ count = 30 }: { count?: number }) {
   return (
-    <div className={`mx-auto flex flex-col-reverse items-center gap-[3px] ${className}`} aria-hidden>
+    <div className="flex w-full flex-col-reverse items-center gap-[2px]">
       {Array.from({ length: count }, (_, i) => {
         const t = i / (count - 1);
         const width = 34 + 30 * Math.sin(t * Math.PI * 1.15 + 0.5) + 22 * t;
-        return <i key={i} className="block h-[7px] rounded-[1px] bg-accent opacity-90" style={{ width: `${width.toFixed(1)}%` }} />;
+        return <i key={i} className="block h-[4px] rounded-[1px] bg-accent opacity-90" style={{ width: `${width.toFixed(1)}%` }} />;
       })}
+    </div>
+  );
+}
+
+const PROFILE = [
+  ["Printer", "K1"],
+  ["Material", "PLA"],
+  ["Layer height", "0.20 mm"],
+  ["Infill", "15%"],
+  ["Walls", "3"],
+  ["Supports", "Tree"],
+  ["Brim", "Auto"],
+];
+
+/** Decorative: the hero graphic, styled like a slicer program with a model on the build plate. */
+function SlicerWindow() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-line bg-card font-mono text-[11px] text-muted" data-solid aria-hidden>
+      {/* title bar */}
+      <div className="flex items-center gap-2 border-b border-line bg-paper px-3 py-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-line" />
+        <span className="h-2.5 w-2.5 rounded-full bg-line" />
+        <span className="h-2.5 w-2.5 rounded-full bg-line" />
+        <span className="ml-2 truncate tracking-[0.06em]">SQUIGGLE SLICER — vase.stl</span>
+      </div>
+      {/* tabs */}
+      <div className="flex gap-5 border-b border-line px-4 pt-2 tracking-[0.08em] uppercase">
+        <span className="pb-2">Prepare</span>
+        <span className="border-b-2 border-accent pb-2 text-accent">Preview</span>
+        <span className="pb-2">Device</span>
+      </div>
+      <div className="grid grid-cols-[1fr_150px] sm:grid-cols-[1fr_176px]">
+        {/* viewport */}
+        <div className="relative flex min-h-[270px] items-end justify-center overflow-hidden bg-paper px-6 pt-6 pb-9">
+          {/* build plate, drawn in perspective */}
+          <svg className="absolute inset-x-0 bottom-0 h-[46%] w-full" viewBox="0 0 200 80" preserveAspectRatio="none">
+            <path d="M30 14 H170 L196 76 H4 Z" fill="#12151a" stroke="#2b313a" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+            {[1, 2, 3, 4, 5, 6].map((i) => {
+              const t = i / 7;
+              return <line key={`v${i}`} x1={30 + 140 * t} y1="14" x2={4 + 192 * t} y2="76" stroke="#232830" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />;
+            })}
+            {[0.22, 0.42, 0.62, 0.82].map((t) => (
+              <line key={`h${t}`} x1={30 - 26 * t} y1={14 + 62 * t} x2={170 + 26 * t} y2={14 + 62 * t} stroke="#232830" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+            ))}
+          </svg>
+          <div className="relative w-[42%] max-w-[120px]">
+            <Layers />
+          </div>
+          {/* layer slider */}
+          <div className="absolute top-5 right-3 bottom-9 flex w-3 flex-col items-center">
+            <div className="h-full w-px bg-line" />
+            <div className="absolute top-[26%] h-2.5 w-2.5 rounded-full border border-accent bg-paper" />
+          </div>
+          <span className="absolute top-3 left-3 tracking-[0.08em]">LAYER 034 / 212</span>
+        </div>
+        {/* print profile */}
+        <div className="border-l border-line px-3 py-3">
+          <p className="mb-2 tracking-[0.1em] text-accent uppercase">Print profile</p>
+          <dl className="space-y-1.5">
+            {PROFILE.map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-2 border-b border-line/60 pb-1.5">
+                <dt className="truncate">{k}</dt>
+                <dd className="shrink-0 text-ink">{v}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-3 rounded-sm bg-accent py-1.5 text-center font-bold tracking-[0.1em] text-black">SLICED</div>
+        </div>
+      </div>
+      {/* status bar */}
+      <div className="flex justify-between gap-3 border-t border-line bg-paper px-3 py-2 tracking-[0.06em]">
+        <span>TIME 2H 14M</span>
+        <span>FILAMENT 48 G</span>
+        <span className="text-accent">READY</span>
+      </div>
     </div>
   );
 }
@@ -45,10 +120,7 @@ export default async function Home() {
             <Link href={start} className="btn btn-ghost px-6 py-3.5">Start a custom design</Link>
           </div>
         </div>
-        <div className="card relative px-8 pt-12 pb-10" data-solid>
-          <span className="absolute top-3.5 left-9 font-mono text-[10.5px] tracking-[0.08em] text-[#5d6672]">LAYER 034 / 212 · 0.20 MM · PLA</span>
-          <Layers className="w-[58%] max-w-[230px]" />
-        </div>
+        <SlicerWindow />
       </section>
 
       <section className="mx-auto grid max-w-6xl gap-5 px-5 md:grid-cols-3">
