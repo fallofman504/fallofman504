@@ -31,15 +31,16 @@ New or different:
 | USB-present sense (10k/20k divider) | 1 |
 | Lamp button (to GND) | 3 |
 | Group button (to GND) | 4 |
-| Plain strip: white, or warm (MOSFET gate) | 5 |
-| Plain strip: cool (MOSFET gate) | 6 |
-| LED power enable, HIGH = on | 7 |
-| Pixel data (via 74AHCT125 + 330 Ω) | 10 |
-| Charging status (TP4056 CHRG) | 20 |
+| LED power enable, HIGH = on | 5 |
+| Pixel data (via 74AHCT125 + 330 Ω) | 6 |
+| Plain strip: white, or warm (MOSFET gate) | 7 |
+| Plain strip: cool (MOSFET gate) | 20 |
 
-Buttons use the chip's internal pull-ups. GPIO 2, 8 and 9 are left alone because the chip reads them at power-up. GPIO 20 is the board's serial RX pin; it is free because the log goes over USB.
+These match the 3D-printed carrier board in [`../carrier`](../carrier). Buttons use the chip's internal pull-ups. GPIO 2, 8 and 9 are left alone because the chip reads them at power-up.
 
-The firmware expects the battery divider and USB sense to be wired, as on your other lamps. On a bare bench board, tie GPIO0 and GPIO1 to GND: floating, they can read like a flat battery or a USB cable going in and out.
+**Charging status (TP4056 CHRG) is optional and off by default.** The module doesn't bring that signal out, so it isn't on the carrier board. Without it the lamp shows "charging" whenever USB power is present and never shows "full". To use it, wire the module's charge-LED pad to a free pin (GPIO10) and set `PIN_CHRG` in `config.h`.
+
+The firmware expects the battery divider and USB sense to be wired. On a bare bench board, tie GPIO0 and GPIO1 to GND: floating, they can read like a flat battery or a USB cable going in and out.
 
 ## First-time setup (Arduino IDE 2.x)
 

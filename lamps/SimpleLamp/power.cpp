@@ -43,7 +43,7 @@ void begin() {
   digitalWrite(PIN_LED_EN, LOW);
   gpio_sleep_sel_dis((gpio_num_t)PIN_LED_EN);   // keep its level during naps
   pinMode(PIN_USB_SENSE, INPUT);          // external 10k/20k divider
-  pinMode(PIN_CHRG, INPUT_PULLUP);        // open-drain, LOW = charging
+  if (PIN_CHRG >= 0) pinMode(PIN_CHRG, INPUT_PULLUP);   // open-drain, LOW = charging
   analogReadResolution(12);
   analogSetPinAttenuation(PIN_BATT_ADC, ADC_11db);
   usbState = digitalRead(PIN_USB_SENSE);
@@ -78,8 +78,9 @@ bool usbPresent() { return usbState; }
 // circuit attached. Battery protection is skipped in that case.
 bool batteryPresent() { return vRaw >= 2.5f; }
 bool externalPower() { return usbState || !batteryPresent(); }
-bool charging() { return usbState && digitalRead(PIN_CHRG) == LOW; }
-bool chargeFull() { return usbState && digitalRead(PIN_CHRG) == HIGH; }
+// Without the CHRG wire the lamp can't tell "charging" from "full".
+bool charging() { return usbState && (PIN_CHRG < 0 || digitalRead(PIN_CHRG) == LOW); }
+bool chargeFull() { return usbState && PIN_CHRG >= 0 && digitalRead(PIN_CHRG) == HIGH; }
 
 void ledPower(bool on) {
   if (on == ledOn) return;

@@ -20,15 +20,20 @@
 // alone: the chip reads them at power-up to decide how to start.
 #if defined(CONFIG_IDF_TARGET_ESP32C3)
   #define BOARD_NAME     "ESP32-C3"
+  // These match the 3D-printed carrier board in ../carrier.
   #define PIN_BATT_ADC    0   // battery via 220k/220k divider
   #define PIN_USB_SENSE   1   // TP4056 IN+ via 10k/20k divider (HIGH = USB in)
   #define PIN_BTN_LAMP    3   // push button to GND: this lamp
   #define PIN_BTN_GROUP   4   // push button to GND: paired lamps
-  #define PIN_PWM_A       5   // plain strip: white, or warm white (MOSFET gate)
-  #define PIN_PWM_B       6   // plain strip: cool white (MOSFET gate)
-  #define PIN_LED_EN      7   // HIGH = LED power on (high-side switch)
-  #define PIN_LED_DATA   10   // pixels: to 74AHCT125 input -> 330R -> DIN
-  #define PIN_CHRG       20   // TP4056 CHRG (LOW = charging)
+  #define PIN_LED_EN      5   // HIGH = LED power on (2N7000 -> P-channel MOSFET)
+  #define PIN_LED_DATA    6   // pixels: to 74AHCT125 input -> 330R -> DIN
+  #define PIN_PWM_A       7   // plain strip: white, or warm white (MOSFET gate)
+  #define PIN_PWM_B      20   // plain strip: cool white (MOSFET gate)
+  // TP4056 CHRG (LOW = charging). Not on the carrier board: the module doesn't
+  // bring it out. To use it, solder a wire from the module's charge-LED pad to
+  // a free pin (GPIO10 is free) and put that pin number here. -1 = not wired:
+  // the lamp then shows "charging" whenever USB power is present.
+  #define PIN_CHRG       -1
 #else
   #error "Unsupported board. Choose Tools > Board > ESP32C3 Dev Module."
 #endif
