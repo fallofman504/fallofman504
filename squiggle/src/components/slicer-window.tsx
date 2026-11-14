@@ -11,7 +11,7 @@ const PROFILE = [
   ["Layer", "0.20 mm"],
   ["Infill", "15%"],
   ["Walls", "3"],
-  ["Supports", "Tree"],
+  ["Supports", "None"],
   ["Brim", "Auto"],
 ];
 
