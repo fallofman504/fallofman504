@@ -47,7 +47,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       </div>
 
       {request.status === "submitted" && (
-        <div className="card mt-6 bg-sun/40">
+        <div className="card mt-6 bg-tint">
           <h2 className="text-2xl font-bold">We&apos;re on it ✏️</h2>
           <p className="mt-1">
             {request.kind === "print_only"
@@ -82,11 +82,11 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       {quote && open && (!stlOrder || !printOrder) && (
         <section className="mt-8 grid gap-4 sm:grid-cols-2">
           {quote.print_total_cents != null && !printOrder && (
-            <div className="card bg-sun/40">
+            <div className="card bg-tint">
               <h3 className="text-2xl font-bold">Have us print it</h3>
               <p className="mt-1 text-3xl font-extrabold tabular-nums">{money(quote.print_total_cents)}</p>
               <p className="mt-2 text-sm">Pay a 50% deposit today, the rest when it&apos;s ready. Pickup, Houston delivery, or shipping.</p>
-              <Link href={`/requests/${id}/order`} className="btn btn-coral mt-4">Choose pickup or delivery</Link>
+              <Link href={`/requests/${id}/order`} className="btn btn-primary mt-4">Choose pickup or delivery</Link>
             </div>
           )}
           {quote.stl_price_cents != null && !stlOrder && (
@@ -145,11 +145,11 @@ function OrderCard({ order, modelId }: { order: Order; modelId?: string }) {
       {order.tracking && <p className="mt-2 text-sm">Tracking: <span className="font-semibold">{order.tracking}</span></p>}
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {modelId && order.type === "stl" && <a href={`/api/files/${modelId}`} className="btn btn-coral">Download STL</a>}
+        {modelId && order.type === "stl" && <a href={`/api/files/${modelId}`} className="btn btn-primary">Download STL</a>}
         {unpaid && (
           <>
             <form action={payOrder.bind(null, order.id)}>
-              <SubmitButton className="btn btn-coral" pendingText="Opening checkout…">
+              <SubmitButton className="btn btn-primary" pendingText="Opening checkout…">
                 {order.type === "stl" ? `Pay ${money(order.total_cents)}` : `Pay ${money(order.deposit_cents)} deposit`}
               </SubmitButton>
             </form>
@@ -161,7 +161,7 @@ function OrderCard({ order, modelId }: { order: Order; modelId?: string }) {
         {!unpaid && order.type === "print" && due > 0 && (
           <>
             <form action={payOrder.bind(null, order.id)}>
-              <SubmitButton className={order.status === "ready" ? "btn btn-coral" : "btn btn-ghost"} pendingText="Opening checkout…">
+              <SubmitButton className={order.status === "ready" ? "btn btn-primary" : "btn btn-ghost"} pendingText="Opening checkout…">
                 Pay remaining {money(due)}
               </SubmitButton>
             </form>

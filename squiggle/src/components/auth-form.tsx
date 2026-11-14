@@ -39,7 +39,7 @@ export function AuthForm({ mode, next, notice }: { mode: "login" | "signup"; nex
         </div>
         {notice && !state?.error && <p className="notice" role="status">{notice}</p>}
         {state?.error && <p className="error" role="alert">{state.error}</p>}
-        <SubmitButton className="btn btn-coral w-full py-3">{mode === "login" ? "Log in" : "Create account"}</SubmitButton>
+        <SubmitButton className="btn btn-primary w-full py-3">{mode === "login" ? "Log in" : "Create account"}</SubmitButton>
         {mode === "login" && (
           <Link href="/forgot-password" className="btn btn-ghost w-full py-3">Forgot password?</Link>
         )}

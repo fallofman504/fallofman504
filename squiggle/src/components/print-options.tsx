@@ -31,7 +31,7 @@ export function PrintOptionsFields() {
           <input className="input" type="number" name="quantity" min={1} max={MAX_QUANTITY} defaultValue={1} required />
         </label>
       </div>
-      <p className="rounded-xl border border-ink/20 bg-sun/40 px-3.5 py-2.5 text-sm">
+      <p className="rounded border border-ink/20 bg-tint px-3.5 py-2.5 text-sm">
         <b>Heads up:</b> {BRIM_NOTICE}
       </p>
     </div>

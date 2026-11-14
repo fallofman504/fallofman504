@@ -59,7 +59,7 @@ export function QuoteForm({ requestId, revision }: { requestId: string; revision
             <div key={n} className="flex gap-2">
               <input className="input" value={it.label} onChange={(e) => update(n, { label: e.target.value })} placeholder="Line item" aria-label={`Item ${n + 1} label`} />
               <input className="input w-32 text-right" value={it.amount} onChange={(e) => update(n, { amount: e.target.value })} placeholder="0.00" inputMode="decimal" aria-label={`Item ${n + 1} amount`} />
-              <button type="button" className="cursor-pointer px-1 text-muted hover:text-coral-dark" onClick={() => setItems(items.filter((_, i) => i !== n))} aria-label={`Remove item ${n + 1}`}>✕</button>
+              <button type="button" className="cursor-pointer px-1 text-muted hover:text-accent" onClick={() => setItems(items.filter((_, i) => i !== n))} aria-label={`Remove item ${n + 1}`}>✕</button>
             </div>
           ))}
         </div>
@@ -92,7 +92,7 @@ export function QuoteForm({ requestId, revision }: { requestId: string; revision
       </label>
 
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn btn-coral" disabled={busy}>{busy ? "Sending…" : "Send quote to customer"}</button>
+      <button className="btn btn-primary" disabled={busy}>{busy ? "Sending…" : "Send quote to customer"}</button>
     </form>
   );
 }
@@ -111,7 +111,7 @@ function FileInput({ name, label, accept }: { name: string; label: string; accep
   return (
     <label>
       <span className="label">{label}</span>
-      <input type="file" name={name} accept={accept} className="block w-full text-sm file:mr-3 file:cursor-pointer file:rounded-full file:border-2 file:border-ink file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
+      <input type="file" name={name} accept={accept} className="block w-full text-sm file:mr-3 file:cursor-pointer file:rounded-full file:border-2 file:border-line file:bg-card file:px-3 file:py-1.5 file:text-xs file:font-semibold" />
     </label>
   );
 }

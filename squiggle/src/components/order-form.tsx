@@ -32,7 +32,7 @@ export function OrderForm({ requestId, printTotal, fees, defaults }: {
         <legend className="label">How do you want to get it?</legend>
         <div className="space-y-3">
           {(Object.keys(FULFILLMENT_LABEL) as Fulfillment[]).filter((m) => fees[m] != null).map((m) => (
-            <label key={m} className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border-2 border-line bg-white p-4 transition has-checked:border-ink has-checked:bg-sun/40">
+            <label key={m} className="flex cursor-pointer items-center justify-between gap-4 rounded-md border-2 border-line bg-field p-4 transition has-checked:border-accent has-checked:bg-tint">
               <span>
                 <input type="radio" name="fulfillment" value={m} checked={method === m} onChange={() => setMethod(m)} className="sr-only" />
                 <span className="block font-bold">{FULFILLMENT_LABEL[m]}</span>
@@ -69,7 +69,7 @@ export function OrderForm({ requestId, printTotal, fees, defaults }: {
           </div>
         </dl>
         {state?.error && <p className="error mt-4" role="alert">{state.error}</p>}
-        <SubmitButton className="btn btn-coral mt-5 w-full py-3.5 text-base" pendingText="Opening checkout…">Pay {money(deposit)} deposit</SubmitButton>
+        <SubmitButton className="btn btn-primary mt-5 w-full py-3.5 text-base" pendingText="Opening checkout…">Pay {money(deposit)} deposit</SubmitButton>
       </div>
     </form>
   );

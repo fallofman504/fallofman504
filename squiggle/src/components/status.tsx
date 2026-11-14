@@ -1,9 +1,9 @@
 import type { DesignRequest, Order } from "@/lib/types";
 
 const tone = {
-  wait: "bg-sun/50",
-  go: "bg-mint",
-  act: "bg-coral/25",
+  wait: "border-amber/30 bg-amber/10 text-amber",
+  go: "border-accent/30 bg-accent/10 text-accent",
+  act: "border-accent bg-accent text-black",
   done: "bg-ink/5 text-muted",
 };
 

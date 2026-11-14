@@ -78,7 +78,7 @@ export function NewRequestForm({ mode, accept, maxFiles, maxBytes }: { mode: "cu
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-          className={`rounded-2xl border-2 border-dashed p-6 text-center transition ${dragging ? "border-coral bg-coral/10" : "border-line bg-white"}`}
+          className={`rounded-md border-2 border-dashed p-6 text-center transition ${dragging ? "border-accent bg-accent/10" : "border-line bg-field"}`}
         >
           <p className="font-semibold">Drop files here</p>
           <p className="mt-1 text-sm text-muted">{printOnly ? "STL, 3MF, OBJ, or STEP" : "Images, PDF, STL, OBJ, 3MF, STEP"} · up to {maxFiles} files, {fileSize(maxBytes)} each</p>
@@ -89,11 +89,11 @@ export function NewRequestForm({ mode, accept, maxFiles, maxBytes }: { mode: "cu
         {files.length > 0 && (
           <ul className="mt-3 space-y-2">
             {files.map((f, i) => (
-              <li key={f.name + f.size} className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white px-3.5 py-2 text-sm">
+              <li key={f.name + f.size} className="flex items-center justify-between gap-3 rounded border border-line bg-field px-3.5 py-2 text-sm">
                 <span className="min-w-0 truncate font-medium">{f.name}</span>
                 <span className="flex shrink-0 items-center gap-3 text-muted">
                   {fileSize(f.size)}
-                  <button type="button" className="cursor-pointer font-semibold text-coral-dark" onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                  <button type="button" className="cursor-pointer font-semibold text-accent" onClick={() => setFiles(files.filter((_, j) => j !== i))}
                     aria-label={`Remove ${f.name}`}>Remove</button>
                 </span>
               </li>
@@ -120,7 +120,7 @@ export function NewRequestForm({ mode, accept, maxFiles, maxBytes }: { mode: "cu
             <legend className="label">What are you after?</legend>
             <div className="grid gap-3 sm:grid-cols-3">
               {INTENTS.map((o) => (
-                <label key={o.value} className="cursor-pointer rounded-2xl border-2 border-line bg-white p-4 transition has-checked:border-ink has-checked:bg-sun/40">
+                <label key={o.value} className="cursor-pointer rounded-md border-2 border-line bg-field p-4 transition has-checked:border-accent has-checked:bg-tint">
                   <input type="radio" name="intent" value={o.value} checked={intent === o.value} onChange={() => setIntent(o.value)} className="sr-only" />
                   <span className="block font-bold">{o.title}</span>
                   <span className="mt-1 block text-sm text-muted">{o.body}</span>
@@ -139,7 +139,7 @@ export function NewRequestForm({ mode, accept, maxFiles, maxBytes }: { mode: "cu
       )}
 
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn btn-coral px-7 py-3.5 text-base" disabled={busy}>{busy ? "Sending…" : printOnly ? "Get my print quote" : "Send it to Squiggle"}</button>
+      <button className="btn btn-primary px-7 py-3.5 text-base" disabled={busy}>{busy ? "Sending…" : printOnly ? "Get my print quote" : "Send it to Squiggle"}</button>
       <p className="text-sm text-muted">
         {printOnly
           ? "No payment now. You'll get a price in about an hour, then choose pickup, delivery, or shipping."

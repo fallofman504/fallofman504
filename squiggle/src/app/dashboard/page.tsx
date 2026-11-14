@@ -18,7 +18,7 @@ export default async function Dashboard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/print" className="btn btn-ghost">Print my model</Link>
-          <Link href="/requests/new" className="btn btn-coral">New custom design</Link>
+          <Link href="/requests/new" className="btn btn-primary">New custom design</Link>
         </div>
       </div>
 
@@ -27,7 +27,7 @@ export default async function Dashboard() {
           <h2 className="text-2xl font-bold">Nothing here yet</h2>
           <p className="mx-auto mt-2 max-w-md text-muted">Send us a photo, a file, or a description and we&apos;ll come back with a 3D model and a quote in about an hour.</p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <Link href="/requests/new" className="btn btn-coral">Start a custom design</Link>
+            <Link href="/requests/new" className="btn btn-primary">Start a custom design</Link>
             <Link href="/print" className="btn btn-ghost">Print my model</Link>
           </div>
         </div>
@@ -35,7 +35,7 @@ export default async function Dashboard() {
         <ul className="mt-8 space-y-3">
           {requests.map((r) => (
             <li key={r.id}>
-              <Link href={`/requests/${r.id}`} className="card-soft flex flex-wrap items-center justify-between gap-3 transition hover:border-ink">
+              <Link href={`/requests/${r.id}`} className="card-soft flex flex-wrap items-center justify-between gap-3 transition hover:border-accent">
                 <div className="min-w-0">
                   <p className="truncate text-lg font-bold">{r.title}</p>
                   <p className="text-sm text-muted">{r.ref} · sent {dateTime(r.created_at)}</p>

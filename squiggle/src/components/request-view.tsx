@@ -10,7 +10,7 @@ export function ReferenceFiles({ files }: { files: FileRow[] }) {
     <ul className="flex flex-wrap gap-3">
       {files.map((f) => (
         <li key={f.id}>
-          <a href={`/api/files/${f.id}`} target="_blank" className="block w-32 overflow-hidden rounded-xl border border-line bg-white text-xs hover:border-ink">
+          <a href={`/api/files/${f.id}`} target="_blank" className="block w-32 overflow-hidden rounded border border-line bg-field text-xs hover:border-accent">
             {f.mime.startsWith("image/") && f.mime !== "image/heic" ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`/api/files/${f.id}`} alt={f.filename} className="h-24 w-full object-cover" />
@@ -47,9 +47,9 @@ export function QuoteCard({ quote, files, superseded, title }: { quote: Quote; f
   const video = mine.find((f) => f.kind === "turntable");
   const render = mine.find((f) => f.kind === "render");
   return (
-    <div className={`overflow-hidden rounded-2xl border-2 border-ink bg-white ${superseded ? "opacity-60" : ""}`}>
+    <div className={`overflow-hidden rounded-md border border-line bg-field ${superseded ? "opacity-60" : ""}`}>
       {(video || render) && (
-        <div className={`grid gap-px bg-ink ${video && render ? "sm:grid-cols-2" : ""}`}>
+        <div className={`grid gap-px bg-line ${video && render ? "sm:grid-cols-2" : ""}`}>
           {video && (
             <figure className="bg-paper">
               <video src={`/api/files/${video.id}`} className="aspect-square w-full object-cover" autoPlay loop muted playsInline controls />
@@ -67,7 +67,7 @@ export function QuoteCard({ quote, files, superseded, title }: { quote: Quote; f
           )}
         </div>
       )}
-      <div className="border-t-2 border-ink p-5">
+      <div className="border-t-2 border-line p-5">
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-xl font-bold">{title ?? (superseded ? "Earlier quote" : "Your quote")}</h3>
           {quote.lead_time_days != null && <span className="text-sm text-muted">Est. {quote.lead_time_days} day{quote.lead_time_days === 1 ? "" : "s"} to make</span>}
@@ -124,7 +124,7 @@ export function Thread({ messages, quotes, files, viewer }: { messages: Message[
               {m.sender === "squiggle" ? "Squiggle" : own ? "You" : "Customer"} · {dateTime(m.created_at)}
             </p>
             <div className={`max-w-[92%] space-y-3 ${quote ? "w-full sm:max-w-xl" : ""}`}>
-              <p className={`rounded-2xl px-4 py-3 text-[15px] whitespace-pre-wrap ${own ? "rounded-tr-sm bg-sun/50" : "rounded-tl-sm border border-line bg-white"}`}>{m.body}</p>
+              <p className={`rounded-md px-4 py-3 text-[15px] whitespace-pre-wrap ${own ? "rounded-tr-sm bg-tint" : "rounded-tl-sm border border-line bg-field"}`}>{m.body}</p>
               {quote && <QuoteCard quote={quote} files={files} superseded={quote.id !== latest} />}
             </div>
           </li>
