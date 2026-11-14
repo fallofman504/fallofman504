@@ -1,14 +1,19 @@
-#include "net.h"
+// =====================================================================
+//  net.cpp  -  lamp-to-lamp radio (ESP-NOW): pairing, group commands,
+//              and status between paired lamps. No router involved.
+//
+//  Every packet is broadcast on RADIO_CHANNEL. A lamp only obeys packets
+//  from lamps in its own group list (pairing excepted). Commands are sent
+//  as a burst of repeats so lamps that are napping catch one copy.
+// =====================================================================
+#include "lamp.h"
 #include "combos.h"
-#include "config.h"
-#include "light.h"
-#include "settings.h"
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
 
-namespace net {
+namespace Net {
 
 // ---------- Wire format ----------
 // Every packet is broadcast: 6-byte header, then a payload that depends on type.
@@ -17,11 +22,11 @@ enum : uint8_t {
   T_PAIR = 1,   // "I'm in pairing mode": count, mac[count] (sender's group)
   T_SYNC,       // "here is my group list": count, mac[count]
   T_GROUP,      // "exactly these lamps on": count, mac[count]
-  T_SET,        // target mac, fields, on, bri, cct, name[16]
+  T_SET,        // target mac, fields, on, level, temp, name[24]
   T_KICK,       // target mac: remove it from the group
   T_LEAVE,      // sender is leaving the group
   T_QUERY,      // everyone report status
-  T_STATUS,     // on, bri, cct, hasCct, mv(2), name[16]
+  T_STATUS,     // on, level, levelCount, level %, temp, tempCount, hasTemp, battery %, name[24]
   T_COUNT
 };
 static const uint8_t kMagic0 = 'L', kMagic1 = 'N', kVersion = 1;
@@ -33,8 +38,6 @@ static const uint8_t kBroadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 // ---------- State ----------
 static Preferences prefs;
 static uint8_t self_[6];
-static char name_[17] = "";
-static uint16_t battMv_ = 0;
 
 static Peer peers_[kMaxPeers];   // kept sorted by MAC
 static uint8_t peerCount_ = 0;
@@ -46,7 +49,7 @@ static uint32_t awakeUntil_ = 0;
 static uint16_t seq_ = 0;
 
 static bool pairing_ = false;
-static uint32_t pairingStart_ = 0, lastBeacon_ = 0;
+static uint32_t pairingStart_ = 0, lastBeacon_ = 0, pairingBlinkUntil_ = 0;
 
 static uint32_t statusAt_ = 0;   // 0 = nothing pending
 
@@ -158,17 +161,26 @@ static void burst(uint8_t type, const uint8_t* payload, uint8_t len,
   b.until = 0;
 }
 
+// Turn this lamp on or off because the group (or the app) said so.
+static void setLamp(bool on) {
+  if (on && !lampOn) lampTurnOn();
+  else if (!on && lampOn) lampTurnOff(true);
+}
+
 static void sendStatusNow() {
   uint8_t buf[kMaxPacket];
   uint8_t n = putHeader(buf, T_STATUS);
-  buf[n++] = light::isOn();
-  buf[n++] = light::brightness();
-  buf[n++] = light::cct();
-  buf[n++] = light::hasCct();
-  buf[n++] = battMv_ & 0xFF;
-  buf[n++] = battMv_ >> 8;
-  memcpy(buf + n, name_, 16);
-  n += 16;
+  buf[n++] = lampOn;
+  buf[n++] = st.level;
+  buf[n++] = user.levelCount;
+  buf[n++] = user.levels[st.level < user.levelCount ? st.level : 0];
+  buf[n++] = st.temp;
+  buf[n++] = user.tempCount;
+  buf[n++] = lightHasTemp();
+  buf[n++] = Power::externalPower() ? 255 : Power::percent();
+  memset(buf + n, 0, 24);
+  strlcpy((char *)buf + n, userSaved.lampName, 24);
+  n += 24;
   transmit(buf, n);
   transmit(buf, n);
 }
@@ -187,17 +199,26 @@ static void applyGroupMask(uint16_t mask) {
   bool me = mask & (1u << peerCount_);
   if (me) memcpy(p + 1 + (n++) * 6, self_, 6);
   p[0] = n;
-  light::setOn(me);
+  setLamp(me);
   allOn_ = (n == peerCount_ + 1);
   if (peerCount_) burst(T_GROUP, p, 1 + n * 6);
 }
 
-static void applySet(uint8_t fields, bool on, uint8_t bri, uint8_t cct, const char* nm) {
-  if (fields & SET_BRI) light::setBrightness(bri);
-  if (fields & SET_CCT) light::setCct(cct);
-  if (fields & SET_ON) light::setOn(on);
-  if ((fields & SET_NAME) && nm) setName(nm);
+static void applySet(uint8_t fields, bool on, uint8_t level, uint8_t temp, const char *nm) {
+  if ((fields & SET_LEVEL) && level < user.levelCount) st.level = level;
+  if ((fields & SET_TEMP) && temp < user.tempCount) st.temp = temp;
+  if (fields & (SET_LEVEL | SET_TEMP)) { Leds::startCrossfade(); noteLightChanged(); }
+  if (fields & SET_ON) setLamp(on);
+  if ((fields & SET_NAME) && nm && nm[0]) {
+    UserSettings keep = user;          // save only the name, not unsaved app previews
+    user = userSaved;
+    strlcpy(user.lampName, nm, sizeof(user.lampName));
+    settingsSaveUser();
+    user = keep;
+    strlcpy(user.lampName, nm, sizeof(user.lampName));
+  }
   if ((fields & SET_ON) && !on) allOn_ = false;
+  noteActivity();
   statusChanged();
 }
 
@@ -218,7 +239,9 @@ static void handle(const Rx& rx) {
     added |= mergeList(p, len);
     if (added) {
       savePeers();
-      light::blink(2);
+      LOG("Paired: %u other lamp(s) in the group", peerCount_);
+      Leds::overlay(OV_BLINK, 1000, 2);
+      pairingBlinkUntil_ = (millis() + 1000) | 1;
       sendSync();  // lamps already in our group learn about the newcomers
     }
     return;
@@ -242,24 +265,25 @@ static void handle(const Rx& rx) {
       if (len < 1 || len < 1 + p[0] * 6) return;
       bool me = false;
       for (uint8_t i = 0; i < p[0]; i++) me |= isSelf(p + 1 + i * 6);
-      light::setOn(me);
+      setLamp(me);
+      noteActivity();
       allOn_ = (p[0] == peerCount_ + 1);
       comboStep_ = 0;
       lastGroupTap_ = 0;
-      keepAwake(3000);  // more taps are probably coming
+      keepAwake(STAY_AWAKE_MS);  // more taps are probably coming
       statusChanged();
       break;
     }
 
     case T_SET:
-      if (len < 10 + 16 || !isSelf(p)) return;
+      if (len < 10 + 24 || !isSelf(p)) return;
       {
-        char nm[17];
-        memcpy(nm, p + 10, 16);
-        nm[16] = 0;
+        char nm[24];
+        memcpy(nm, p + 10, 24);
+        nm[23] = 0;
         applySet(p[6], p[7], p[8], p[9], nm);
       }
-      keepAwake(3000);
+      keepAwake(STAY_AWAKE_MS);
       break;
 
     case T_KICK:
@@ -267,7 +291,9 @@ static void handle(const Rx& rx) {
       if (isSelf(p)) {
         peerCount_ = 0;
         savePeers();
-        light::blink(3);
+        LOG("Removed from the group by another lamp");
+        Power::ledPower(true);
+        Leds::overlay(OV_BLINK, 1500, 3);
       } else if (removePeer(p)) {
         savePeers();
       }
@@ -283,16 +309,19 @@ static void handle(const Rx& rx) {
       break;
 
     case T_STATUS: {
-      if (len < 6 + 16) return;
+      if (len < 8 + 24) return;
       Peer& pr = peers_[from];
       pr.known = true;
       pr.on = p[0];
-      pr.bri = p[1];
-      pr.cct = p[2];
-      pr.hasCct = p[3];
-      pr.mv = p[4] | (p[5] << 8);
-      memcpy(pr.name, p + 6, 16);
-      pr.name[16] = 0;
+      pr.level = p[1];
+      pr.levelCount = p[2];
+      pr.levelPct = p[3];
+      pr.temp = p[4];
+      pr.tempCount = p[5];
+      pr.hasTemp = p[6];
+      pr.battPct = p[7];
+      memcpy(pr.name, p + 8, 24);
+      pr.name[23] = 0;
       pr.seen = millis();
       if (!pr.on) allOn_ = false;
       break;
@@ -325,7 +354,7 @@ void restart() {
 
 void begin() {
   rxQueue_ = xQueueCreate(8, sizeof(Rx));
-  prefs.begin("lamp", false);
+  prefs.begin("group", false);
 
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
@@ -336,10 +365,6 @@ void begin() {
   uint8_t blob[kMaxPeers * 6];
   size_t n = prefs.getBytes("peers", blob, sizeof(blob));
   for (size_t i = 0; i + 6 <= n; i += 6) addPeer(blob + i);
-
-  String stored = prefs.getString("name", "");
-  if (stored.length()) setName(stored.c_str());
-  else snprintf(name_, sizeof(name_), "Lamp %02X%02X", self_[4], self_[5]);
 
   seq_ = (uint16_t)esp_random();
 }
@@ -364,19 +389,6 @@ void keepAwake(uint32_t ms) {
 }
 
 const uint8_t* selfMac() { return self_; }
-const char* name() { return name_; }
-void setName(const char* n) {
-  char clean[17];
-  uint8_t len = 0;
-  for (; *n && len < 16; n++)
-    if (*n >= 32 && *n < 127 && *n != '"' && *n != '\\' && *n != '<') clean[len++] = *n;
-  clean[len] = 0;
-  if (!len || strcmp(clean, name_) == 0) return;
-  strcpy(name_, clean);
-  prefs.putString("name", name_);
-}
-void setBatteryMv(uint16_t mv) { battMv_ = mv; }
-uint16_t batteryMv() { return battMv_; }
 
 uint8_t peerCount() { return peerCount_; }
 const Peer& peer(uint8_t i) { return peers_[i]; }
@@ -385,16 +397,21 @@ void startPairing() {
   pairing_ = true;
   pairingStart_ = millis();
   lastBeacon_ = 0;
-  light::breathe(true);
+  pairingBlinkUntil_ = 0;
+  Power::ledPower(true);
+  Leds::overlay(OV_PAIRING, 0);
+  LOG("Pairing mode");
 }
 void stopPairing() {
   if (!pairing_) return;
   pairing_ = false;
-  light::breathe(false);
+  if (Leds::overlayActive() == OV_PAIRING) Leds::clearOverlay();
+  LOG("Pairing mode ended");
 }
 bool pairing() { return pairing_; }
 
 void leaveGroup() {
+  LOG("Leaving the group");
   if (peerCount_) burst(T_LEAVE, nullptr, 0);
   peerCount_ = 0;
   savePeers();
@@ -408,13 +425,13 @@ void kick(const uint8_t* mac) {
 
 void groupTap() {
   if (!peerCount_) {  // not paired with anything: just act on this lamp
-    light::setOn(!light::isOn());
+    setLamp(!lampOn);
     return;
   }
   uint8_t n = peerCount_ + 1;
   uint32_t now = millis();
-  bool fresh = lastGroupTap_ == 0 || now - lastGroupTap_ > GROUP_RESTART_MS;
-  if (fresh) comboStep_ = (allOn_ && light::isOn()) ? comboCount(n) - 1 : 0;
+  bool fresh = lastGroupTap_ == 0 || elapsedMs(lastGroupTap_, now) > GROUP_RESTART_MS;
+  if (fresh) comboStep_ = (allOn_ && lampOn) ? comboCount(n) - 1 : 0;
   else comboStep_ = (comboStep_ + 1) % comboCount(n);
   lastGroupTap_ = now ? now : 1;
   applyGroupMask(comboAt(n, comboStep_));
@@ -428,24 +445,24 @@ void groupAll(bool on) {
   statusChanged();
 }
 
-void sendSet(const uint8_t* mac, uint8_t fields, bool on, uint8_t bri, uint8_t cct,
-             const char* nm) {
-  if (isSelf(mac)) return applySet(fields, on, bri, cct, nm);
+void sendSet(const uint8_t* mac, uint8_t fields, bool on, uint8_t level, uint8_t temp, const char* nm) {
+  if (isSelf(mac)) return applySet(fields, on, level, temp, nm);
   int at = findPeer(mac);
   if (at < 0) return;
-  uint8_t p[10 + 16] = {0};
+  uint8_t p[10 + 24] = {0};
   memcpy(p, mac, 6);
   p[6] = fields;
   p[7] = on;
-  p[8] = bri;
-  p[9] = cct;
-  if (nm) strncpy((char*)p + 10, nm, 16);
+  p[8] = level;
+  p[9] = temp;
+  if (nm) strlcpy((char*)p + 10, nm, 24);
   burst(T_SET, p, sizeof(p), mac);
-  // Show the change in the control panel straight away.
+  // Show the change in the app straight away; the lamp's own report follows.
   Peer& pr = peers_[at];
   if (fields & SET_ON) pr.on = on;
-  if (fields & SET_BRI) pr.bri = bri;
-  if (fields & SET_CCT) pr.cct = cct;
+  if (fields & SET_LEVEL) pr.level = level;
+  if (fields & SET_TEMP) pr.temp = temp;
+  if ((fields & SET_NAME) && nm) strlcpy(pr.name, nm, sizeof(pr.name));
   if ((fields & SET_ON) && !on) allOn_ = false;
 }
 
@@ -454,18 +471,21 @@ void query() {
 }
 
 void statusChanged() {
-  if (!light::isOn()) allOn_ = false;
+  if (!lampOn) allOn_ = false;
   if (peerCount_ && !statusAt_) statusAt_ = (millis() + 80) | 1;
 }
 
-void loop() {
+void update(uint32_t now) {
   Rx rx;
   while (xQueueReceive(rxQueue_, &rx, 0)) handle(rx);
 
-  uint32_t now = millis();
-
   if (pairing_) {
-    if (now - pairingStart_ > PAIR_WINDOW_MS) {
+    // after the "paired" blinks, go back to pulsing until pairing mode ends
+    if (pairingBlinkUntil_ && (int32_t)(now - pairingBlinkUntil_) >= 0) {
+      pairingBlinkUntil_ = 0;
+      Leds::overlay(OV_PAIRING, 0);
+    }
+    if (elapsedMs(pairingStart_, now) > PAIR_WINDOW_MS) {
       stopPairing();
     } else if (radioOn_ && now - lastBeacon_ >= 150) {
       lastBeacon_ = now;
@@ -497,4 +517,4 @@ void loop() {
   }
 }
 
-}  // namespace net
+}  // namespace Net
