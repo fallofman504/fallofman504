@@ -15,7 +15,7 @@ export default async function ResetPassword({ searchParams }: { searchParams: Pr
       ) : (
         <div className="card mt-7">
           <p>This reset link has expired or was already used.</p>
-          <Link href="/forgot-password" className="btn btn-coral mt-4">Get a new link</Link>
+          <Link href="/forgot-password" className="btn btn-primary mt-4">Get a new link</Link>
         </div>
       )}
     </div>

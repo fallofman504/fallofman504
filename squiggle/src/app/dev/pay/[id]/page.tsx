@@ -25,7 +25,7 @@ export default async function MockPay({ params }: { params: Promise<{ id: string
         </p>
         <p className="mt-5 text-5xl font-extrabold tabular-nums">{money(payment.amount_cents)}</p>
         <form action={mockPay.bind(null, payment.id)} className="mt-6">
-          <SubmitButton className="btn btn-coral w-full py-3.5 text-base">Simulate successful payment</SubmitButton>
+          <SubmitButton className="btn btn-primary w-full py-3.5 text-base">Simulate successful payment</SubmitButton>
         </form>
       </div>
     </div>

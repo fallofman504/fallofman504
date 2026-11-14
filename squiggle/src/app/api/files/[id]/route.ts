@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import { getUser, isAgentRequest } from "@/lib/auth";
-import { getFile, getRequest, hasPaidStl } from "@/lib/data";
+import { getFile, getQuote, getRequest, hasPaidStl } from "@/lib/data";
 import { filePath } from "@/lib/storage";
 
 /**
@@ -20,6 +20,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (user.role !== "admin") {
       const request = getRequest(file.request_id);
       if (request?.user_id !== user.id) return new Response("Not found", { status: 404 });
+      if (file.quote_id && getQuote(file.quote_id)?.status !== "sent") return new Response("Not found", { status: 404 });
       if (file.kind === "model" && !hasPaidStl(file.request_id)) return new Response("Payment required", { status: 402 });
     }
   }

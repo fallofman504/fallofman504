@@ -1,4 +1,5 @@
 import { isStaff, unauthorized } from "@/lib/agent-api";
+import { isAgentRequest } from "@/lib/auth";
 import { createQuote, getRequest, newQuoteId } from "@/lib/data";
 import { checkUpload, saveUpload, UploadError } from "@/lib/storage";
 import type { LineItem } from "@/lib/types";
@@ -22,6 +23,10 @@ function cents(fd: FormData, key: string): number | null | "invalid" {
  *   note             message shown to the customer with the quote
  *   turntable        mp4/webm turntable video        render   png/jpg/webp render
  *   model            stl/3mf/obj — released to the customer only after they pay for the STL
+ *
+ * Quotes that agents post on custom-design requests are held as drafts until a staff member approves them
+ * in the Shop queue (set QUOTE_APPROVAL=all to hold every agent quote, or =none to hold none).
+ * Quotes sent by staff from the Shop queue always go straight to the customer.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isStaff(req))) return unauthorized();
@@ -60,6 +65,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
   if (stl != null && !uploads.some((u) => u.kind === "model")) return bad("Attach the model file when offering an STL price.");
 
+  const policy = process.env.QUOTE_APPROVAL || "custom";
+  const draft = isAgentRequest(req) && (policy === "all" || (policy === "custom" && request.kind === "custom"));
   const quoteId = newQuoteId();
   try {
     uploads.forEach((u) => checkUpload(u.file, u.kind));
@@ -70,9 +77,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       delivery_cents: delivery,
       lead_time_days: lead,
       note: String(fd.get("note") ?? "").trim().slice(0, 4000),
-    });
+    }, draft);
     for (const u of uploads) await saveUpload(u.file, { requestId: request.id, kind: u.kind, quoteId });
-    return Response.json({ quote });
+    return Response.json({ quote, delivered: !draft, ...(draft && { message: "Saved as a draft. A staff member will review it before the customer sees it." }) });
   } catch (e) {
     if (e instanceof UploadError) return bad(e.message);
     throw e;

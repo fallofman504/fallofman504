@@ -97,27 +97,59 @@ export type QuoteInput = {
 /** Reserve a quote id so its media files can be stored before the quote goes live. */
 export const newQuoteId = uid;
 
-export function createQuote(id: string, requestId: string, q: QuoteInput): Quote {
-  const printTotal = q.items.length ? q.items.reduce((s, i) => s + i.amount_cents, 0) : null;
+/** Marks the quote as delivered: the request becomes "quoted" and the quote appears in the customer's thread. */
+function deliverQuote(id: string, requestId: string, note: string) {
   const now = Date.now();
+  db().prepare("UPDATE quotes SET status = 'sent', created_at = ? WHERE id = ?").run(now, id);
+  db().prepare("UPDATE requests SET status = CASE WHEN status = 'submitted' THEN 'quoted' ELSE status END, quoted_at = COALESCE(quoted_at, ?) WHERE id = ?").run(now, requestId);
+  addMessage({ request_id: requestId, sender: "squiggle", body: note || "Your quote is ready.", quote_id: id });
+}
+
+/** With draft = true the quote is held for staff approval and the customer sees nothing yet. */
+export function createQuote(id: string, requestId: string, q: QuoteInput, draft = false): Quote {
+  const printTotal = q.items.length ? q.items.reduce((s, i) => s + i.amount_cents, 0) : null;
   db().transaction(() => {
     db()
       .prepare(
-        `INSERT INTO quotes (id, request_id, items_json, print_total_cents, stl_price_cents, shipping_cents, delivery_cents, lead_time_days, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO quotes (id, request_id, items_json, print_total_cents, stl_price_cents, shipping_cents, delivery_cents, lead_time_days, note, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?)`,
       )
-      .run(id, requestId, JSON.stringify(q.items), printTotal, q.stl_price_cents, q.shipping_cents, q.delivery_cents, q.lead_time_days, q.note, now);
-    db().prepare("UPDATE requests SET status = CASE WHEN status = 'submitted' THEN 'quoted' ELSE status END, quoted_at = COALESCE(quoted_at, ?) WHERE id = ?").run(now, requestId);
-    addMessage({ request_id: requestId, sender: "squiggle", body: q.note || "Your quote is ready.", quote_id: id });
+      .run(id, requestId, JSON.stringify(q.items), printTotal, q.stl_price_cents, q.shipping_cents, q.delivery_cents, q.lead_time_days, q.note, Date.now());
+    if (!draft) deliverQuote(id, requestId, q.note);
   })();
   return getQuote(id)!;
+}
+export function approveQuote(id: string) {
+  db().transaction(() => {
+    const q = getQuote(id);
+    if (q?.status === "draft") deliverQuote(q.id, q.request_id, q.note);
+  })();
+}
+/** Removes a draft and returns the ids of its media files so they can be deleted from disk. */
+export function discardDraftQuote(id: string): string[] {
+  return db().transaction(() => {
+    const q = getQuote(id);
+    if (q?.status !== "draft") return [];
+    const ids = (db().prepare("SELECT id FROM files WHERE quote_id = ?").all(id) as { id: string }[]).map((f) => f.id);
+    db().prepare("DELETE FROM files WHERE quote_id = ?").run(id);
+    db().prepare("DELETE FROM quotes WHERE id = ?").run(id);
+    return ids;
+  })();
 }
 export function getQuote(id: string) {
   const row = db().prepare("SELECT * FROM quotes WHERE id = ?").get(id) as QuoteRow | undefined;
   return row && toQuote(row);
 }
+/** Quotes the customer has been sent, oldest first. */
 export function listQuotes(requestId: string) {
-  return (db().prepare("SELECT * FROM quotes WHERE request_id = ? ORDER BY created_at ASC, rowid ASC").all(requestId) as QuoteRow[]).map(toQuote);
+  return (db().prepare("SELECT * FROM quotes WHERE request_id = ? AND status = 'sent' ORDER BY created_at ASC, rowid ASC").all(requestId) as QuoteRow[]).map(toQuote);
+}
+export function listDraftQuotes(requestId: string) {
+  return (db().prepare("SELECT * FROM quotes WHERE request_id = ? AND status = 'draft' ORDER BY created_at ASC, rowid ASC").all(requestId) as QuoteRow[]).map(toQuote);
+}
+/** Ids of requests that have an agent's draft waiting for approval. */
+export function requestIdsWithDrafts(): Set<string> {
+  return new Set((db().prepare("SELECT DISTINCT request_id FROM quotes WHERE status = 'draft'").all() as { request_id: string }[]).map((r) => r.request_id));
 }
 export function latestQuote(requestId: string) {
   return listQuotes(requestId).at(-1);

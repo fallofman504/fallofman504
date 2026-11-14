@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS password_resets (
 function migrate(d: Database.Database) {
   const has = (table: string, column: string) => (d.pragma(`table_info(${table})`) as { name: string }[]).some((c) => c.name === column);
   if (!has("requests", "kind")) d.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'custom'");
+  if (!has("quotes", "status")) d.exec("ALTER TABLE quotes ADD COLUMN status TEXT NOT NULL DEFAULT 'sent'");
   if (!has("requests", "print_spec_json")) d.exec("ALTER TABLE requests ADD COLUMN print_spec_json TEXT");
 }
 

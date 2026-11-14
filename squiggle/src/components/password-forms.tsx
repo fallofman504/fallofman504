@@ -15,7 +15,7 @@ export function ForgotPasswordForm() {
       </div>
       {state?.notice && <p className="notice" role="status">{state.notice}</p>}
       {state?.error && <p className="error" role="alert">{state.error}</p>}
-      <SubmitButton className="btn btn-coral w-full py-3" pendingText="Sending…">Email me a reset link</SubmitButton>
+      <SubmitButton className="btn btn-primary w-full py-3" pendingText="Sending…">Email me a reset link</SubmitButton>
       <Link href="/login" className="block text-center text-sm font-semibold text-muted underline hover:text-ink">Back to log in</Link>
     </form>
   );
@@ -35,7 +35,7 @@ export function ChoosePasswordForm({ token }: { token: string }) {
         <PasswordInput id="confirm" name="confirm" minLength={8} autoComplete="new-password" required />
       </div>
       {state?.error && <p className="error" role="alert">{state.error}</p>}
-      <SubmitButton className="btn btn-coral w-full py-3">Save new password</SubmitButton>
+      <SubmitButton className="btn btn-primary w-full py-3">Save new password</SubmitButton>
     </form>
   );
 }

@@ -58,7 +58,7 @@ me". Price the print to these settings.
   "process": "filament",      // "filament" or "resin"
   "material": "petg",
   "color": "Blue",
-  "layer": "0.12",            // layer height in mm
+  "layer": "0.12",            // layer height in mm (filament: 0.28, 0.24, 0.20, 0.12, 0.08)
   "infill": "40",             // percent; null for resin
   "supports": "tree",         // "auto" (Squiggle decides), "none", "classic", "tree"; resin uses "auto", "none", "yes"
   "fuzzy_skin": "outer",      // "none", "outer", "all"; null for resin
@@ -101,5 +101,22 @@ curl -X POST "$SITE/api/agent/requests/$ID/quote" \
   -F turntable=@turntable.mp4 -F render=@render.png -F model=@armadillo.stl
 ```
 
-The quote appears in the customer's project thread immediately. Posting again sends a revised quote; the newest
-quote is the one the customer can order from.
+### Drafts and approval
+
+What happens next depends on the request's `kind`:
+
+- `print_only` — the quote appears in the customer's project thread immediately.
+- `custom` — the quote is saved as a **draft**. A staff member reviews it in the Shop queue and either approves it
+  (it is then sent to the customer exactly as posted) or discards it.
+
+The response says which happened: `"delivered": true` or `"delivered": false`.
+
+While a draft is waiting, the request is left out of the default work queue, so it won't be picked up twice, and it
+appears under `draft_quotes` when you fetch the request. If staff discard the draft, the request returns to the
+queue for another attempt.
+
+The shop can change this with the `QUOTE_APPROVAL` setting: `custom` (default), `all` (hold every agent quote), or
+`none` (send every agent quote straight through).
+
+Posting again on a quoted request sends a revised quote; the newest sent quote is the one the customer can order
+from.

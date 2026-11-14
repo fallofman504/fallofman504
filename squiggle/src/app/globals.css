@@ -1,72 +1,91 @@
 @import "tailwindcss";
 
+/* Squiggle "Workshop" theme: dark, technical, lime accent. */
 @theme inline {
-  --color-paper: #faf5ec;
-  --color-card: #fffdf8;
-  --color-ink: #1b1612;
-  --color-muted: #6b6257;
-  --color-line: #e4dbcb;
-  --color-coral: #ff5a36;
-  --color-coral-dark: #e2431f;
-  --color-blue: #2f4bff;
-  --color-sun: #ffcf4a;
-  --color-mint: #bfe8d2;
+  --color-paper: #0d0f12;
+  --color-card: #15181d;
+  --color-field: #0d0f12;
+  --color-tint: #1b2212;
+  --color-ink: #eceef1;
+  --color-muted: #8b93a1;
+  --color-line: #2b313a;
+  --color-accent: #c8ff2e;
+  --color-danger: #ff6b5e;
+  --color-amber: #ffc24a;
   --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, monospace;
 }
 
 html {
+  color-scheme: dark;
   background: var(--color-paper);
   color: var(--color-ink);
+}
+
+body {
+  position: relative;
+  /* faint workshop grid */
+  background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 @layer base {
   h1, h2, h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     line-height: 1.05;
   }
   :focus-visible {
-    outline: 2px solid var(--color-blue);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+  .tabular-nums {
+    font-family: var(--font-mono);
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border-2 border-ink bg-ink px-5 py-2.5 text-sm font-semibold text-paper transition hover:-translate-y-0.5 hover:shadow-[0_4px_0_0_var(--color-ink)] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded border border-line bg-card px-5 py-3 text-[13px] font-bold tracking-[0.06em] text-ink uppercase transition hover:border-accent hover:text-accent disabled:pointer-events-none disabled:opacity-50;
   }
-  .btn-coral {
-    @apply bg-coral text-ink;
+  .btn-primary {
+    @apply border-accent bg-accent text-black hover:bg-[#d8ff66] hover:text-black;
   }
   .btn-ghost {
-    @apply bg-transparent text-ink;
+    @apply bg-transparent;
   }
   .btn-sm {
-    @apply px-3.5 py-1.5 text-xs;
+    @apply px-3.5 py-2 text-xs;
   }
   .card {
-    @apply rounded-3xl border-2 border-ink bg-card p-6;
+    @apply rounded-lg border border-line bg-card p-8;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2018%2018%27%3E%3Cdefs%3E%3CradialGradient%20id%3D%27g%27%20cx%3D%2735%25%27%20cy%3D%2730%25%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%237b8696%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%234a5361%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%232a3039%27/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%278.2%27%20fill%3D%27%2307090b%27/%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27url%28%23g%29%27%20stroke%3D%27%231a1f26%27%20stroke-width%3D%27.8%27/%3E%3Cg%20transform%3D%27rotate%2820%209%209%29%27%20stroke%3D%27%230b0d10%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M4.6%209h8.8M9%204.6v8.8%27/%3E%3C/g%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff18%27%20stroke-width%3D%27.6%27/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2018%2018%27%3E%3Cdefs%3E%3CradialGradient%20id%3D%27g%27%20cx%3D%2735%25%27%20cy%3D%2730%25%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%237b8696%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%234a5361%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%232a3039%27/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%278.2%27%20fill%3D%27%2307090b%27/%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27url%28%23g%29%27%20stroke%3D%27%231a1f26%27%20stroke-width%3D%27.8%27/%3E%3Cg%20transform%3D%27rotate%2865%209%209%29%27%20stroke%3D%27%230b0d10%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M4.6%209h8.8M9%204.6v8.8%27/%3E%3C/g%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff18%27%20stroke-width%3D%27.6%27/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2018%2018%27%3E%3Cdefs%3E%3CradialGradient%20id%3D%27g%27%20cx%3D%2735%25%27%20cy%3D%2730%25%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%237b8696%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%234a5361%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%232a3039%27/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%278.2%27%20fill%3D%27%2307090b%27/%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27url%28%23g%29%27%20stroke%3D%27%231a1f26%27%20stroke-width%3D%27.8%27/%3E%3Cg%20transform%3D%27rotate%28-30%209%209%29%27%20stroke%3D%27%230b0d10%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M4.6%209h8.8M9%204.6v8.8%27/%3E%3C/g%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff18%27%20stroke-width%3D%27.6%27/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2018%2018%27%3E%3Cdefs%3E%3CradialGradient%20id%3D%27g%27%20cx%3D%2735%25%27%20cy%3D%2730%25%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%237b8696%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%234a5361%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%232a3039%27/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%278.2%27%20fill%3D%27%2307090b%27/%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27url%28%23g%29%27%20stroke%3D%27%231a1f26%27%20stroke-width%3D%27.8%27/%3E%3Cg%20transform%3D%27rotate%28100%209%209%29%27%20stroke%3D%27%230b0d10%27%20stroke-width%3D%271.7%27%20stroke-linecap%3D%27round%27%3E%3Cpath%20d%3D%27M4.6%209h8.8M9%204.6v8.8%27/%3E%3C/g%3E%3Ccircle%20cx%3D%279%27%20cy%3D%279%27%20r%3D%276.6%27%20fill%3D%27none%27%20stroke%3D%27%23ffffff18%27%20stroke-width%3D%27.6%27/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 8px 8px, calc(100% - 8px) 8px, 8px calc(100% - 8px), calc(100% - 8px) calc(100% - 8px);
   }
   .card-soft {
-    @apply rounded-2xl border border-line bg-card p-5;
+    @apply rounded-md border border-line bg-card p-5;
   }
   .label {
-    @apply mb-1.5 block text-sm font-semibold;
+    @apply mb-1.5 block text-[13px] font-semibold text-[#b9c0cc];
   }
   .input {
-    @apply w-full rounded-xl border-2 border-line bg-white px-3.5 py-2.5 text-[15px] outline-none transition placeholder:text-muted/60 focus:border-ink;
+    @apply w-full rounded border border-line bg-field px-3.5 py-2.5 text-[15px] text-ink outline-none transition placeholder:text-muted/60 focus:border-accent;
   }
   .badge {
     @apply inline-flex items-center rounded-full border border-ink/15 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
   }
   .eyebrow {
-    @apply text-xs font-bold tracking-[0.14em] text-coral-dark uppercase;
+    @apply font-mono text-xs font-semibold tracking-[0.14em] text-accent uppercase;
+  }
+  .eyebrow::before {
+    content: "// ";
   }
   .notice {
-    @apply rounded-xl border border-ink/20 bg-mint/60 px-3.5 py-2.5 text-sm font-medium;
+    @apply rounded border border-accent/30 bg-tint px-3.5 py-2.5 text-sm font-medium text-[#d6e8a8];
   }
   .error {
-    @apply rounded-xl border border-coral bg-coral/10 px-3.5 py-2.5 text-sm font-medium text-coral-dark;
+    @apply rounded border border-danger/50 bg-danger/10 px-3.5 py-2.5 text-sm font-medium text-danger;
   }
 }

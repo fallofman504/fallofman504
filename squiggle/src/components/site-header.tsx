@@ -10,7 +10,7 @@ export function Logo() {
 export async function SiteHeader() {
   const user = await getUser();
   return (
-    <header className="border-b border-line bg-paper/90 backdrop-blur">
+    <header className="relative z-10 border-b border-line bg-paper/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5">
         <Link href="/" aria-label="Squiggle home">
           <Logo />
@@ -19,26 +19,26 @@ export async function SiteHeader() {
           {user ? (
             <>
               {user.role === "admin" && (
-                <Link href="/admin" className="hover:text-coral-dark">
+                <Link href="/admin" className="hover:text-accent">
                   Shop queue
                 </Link>
               )}
-              <Link href="/dashboard" className="hover:text-coral-dark">
+              <Link href="/dashboard" className="hover:text-accent">
                 My projects
               </Link>
               <form action={logout}>
                 <button className="cursor-pointer text-muted hover:text-ink">Log out</button>
               </form>
-              <Link href="/requests/new" className="btn btn-coral btn-sm">
+              <Link href="/requests/new" className="btn btn-primary btn-sm">
                 New project
               </Link>
             </>
           ) : (
             <>
-              <Link href="/login" className="hover:text-coral-dark">
+              <Link href="/login" className="hover:text-accent">
                 Log in
               </Link>
-              <Link href="/signup" className="btn btn-coral btn-sm">
+              <Link href="/signup" className="btn btn-primary btn-sm">
                 Start a project
               </Link>
             </>

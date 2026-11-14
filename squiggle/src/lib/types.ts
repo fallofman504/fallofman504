@@ -36,6 +36,8 @@ export type FileRow = {
 export type LineItem = { label: string; amount_cents: number };
 export type Quote = {
   id: string;
+  /** "draft": posted by an agent and waiting for staff approval; the customer can't see it yet. */
+  status: "draft" | "sent";
   request_id: string;
   items: LineItem[];
   print_total_cents: number | null;
