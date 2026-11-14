@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lamps</title>
+<style>
+  :root { --bg:#f6f3ee; --card:#fff; --ink:#26221c; --dim:#857d70; --line:#e4dfd6; --accent:#d98a1c; --bad:#b3402a }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17150f; --card:#221f18; --ink:#f1ece2; --dim:#9a9283; --line:#353026; --accent:#f0a73a; --bad:#e2735b }
+  }
+  * { box-sizing: border-box }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui,sans-serif }
+  main { max-width:520px; margin:0 auto }
+  h1 { font-size:22px; margin:4px 0 14px }
+  h2 { font-size:16px; margin:0 0 8px }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px }
+  button, select, input[type=number], input[type=password], input[type=file] {
+    font:inherit; padding:10px 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--card); color:var(--ink); max-width:100% }
+  button.on { background:var(--accent); border-color:var(--accent); color:#1c1405; font-weight:600 }
+  button.link { border:0; background:none; color:var(--dim); padding:4px 0; font-size:14px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px }
+  .card.off .name { color:var(--dim) }
+  .top { display:flex; align-items:center; gap:10px; margin-bottom:6px }
+  .name { flex:1; min-width:0; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .meta, .note { color:var(--dim); font-size:13px }
+  label { display:flex; align-items:center; gap:10px; color:var(--dim); font-size:13px; margin-top:8px }
+  label span { width:86px; flex:none }
+  label input, label select { flex:1; min-width:0 }
+  input[type=range] { accent-color:var(--accent); padding:0 }
+  .foot { display:flex; justify-content:space-between; margin-top:8px }
+  #msg { color:var(--dim); font-size:14px; margin:8px 0 }
+  #mmsg { font-size:14px; margin-top:8px }
+  .bad { color:var(--bad) }
+  details summary { cursor:pointer; color:var(--dim); margin:18px 0 10px }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:0 0 10px; font-size:14px }
+  dt { color:var(--dim) } dd { margin:0; word-break:break-all }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lamps</h1>
+  <div class="bar">
+    <button onclick="post('all',{on:1})">All on</button>
+    <button onclick="post('all',{on:0})">All off</button>
+    <button id="pair" onclick="post('pair',{on:pairing?0:1})">Pair a lamp</button>
+  </div>
+  <div id="msg"></div>
+  <div id="lamps"></div>
+
+  <details id="maker">
+    <summary>Maker settings (this lamp)</summary>
+    <div class="card">
+      <dl>
+        <dt>Firmware</dt><dd id="fw"></dd>
+        <dt>Wi-Fi name</dt><dd id="ssid"></dd>
+        <dt>Wi-Fi password</dt><dd id="wpass"></dd>
+        <dt>Battery</dt><dd id="volts"></dd>
+      </dl>
+      <label><span>Maker password</span><input id="mpass" type="password" autocomplete="off"></label>
+      <label><span>Light type</span><select id="ltype">
+        <option value="0">Pixels: SK6812 RGBW, white only</option>
+        <option value="1">Pixels: warm/cool (cool, warm)</option>
+        <option value="2">Pixels: warm/cool (warm, cool)</option>
+        <option value="3">Pixels: white only, 3 channels</option>
+        <option value="4">Plain strip: white</option>
+        <option value="5">Plain strip: warm + cool</option>
+      </select></label>
+      <label><span>Number of LEDs</span><input id="lcount" type="number" min="1" max="300"></label>
+      <label><span>Brightness limit %</span><input id="lmax" type="number" min="5" max="100"></label>
+      <div class="bar" style="margin:12px 0 0"><button onclick="saveMaker()">Save and restart</button></div>
+      <div class="note" style="margin-top:6px">If warm and cool come out swapped, pick the other warm/cool type.</div>
+    </div>
+    <div class="card">
+      <h2>Firmware update</h2>
+      <input id="fwfile" type="file" accept=".bin">
+      <div class="bar" style="margin:12px 0 0"><button onclick="updateFw()">Install</button></div>
+      <div class="note" style="margin-top:6px">Updates this lamp only. Connect to each lamp's own Wi-Fi to update it.</div>
+    </div>
+    <div id="mmsg"></div>
+  </details>
+</main>
+
+<script>
+  let pairing = false, cards = {}, hold = 0, makerShown = false;
+  const $ = s => document.querySelector(s);
+
+  function post(path, data) {
+    hold = Date.now() + 1500;   // don't let a refresh fight a slider being dragged
+    return fetch('/api/' + path, {method: 'POST', body: new URLSearchParams(data)}).then(refresh);
+  }
+
+  function batt(mv) {
+    if (mv < 2500) return '';
+    const p = Math.max(0, Math.min(100, Math.round((mv - 3300) / 9)));
+    return ' · battery about ' + p + '%';
+  }
+
+  function card(l) {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML =
+      '<div class="top"><div class="name"></div><button class="pw"></button></div>' +
+      '<div class="meta"></div>' +
+      '<label><span>Brightness</span><input class="bri" type="range" min="1" max="255"></label>' +
+      '<label class="cl"><span>Warm / cool</span><input class="cct" type="range" min="0" max="255"></label>' +
+      '<div class="foot"><button class="link rn">Rename</button><button class="link rm"></button></div>';
+    const q = s => d.querySelector(s);
+    let t = 0;
+    const send = (k, v) => {
+      clearTimeout(t);
+      hold = Date.now() + 1500;
+      t = setTimeout(() => post('set', {mac: l.mac, [k]: v}), 120);
+    };
+    q('.pw').onclick = () => post('set', {mac: l.mac, on: d.dataset.on == '1' ? 0 : 1});
+    q('.bri').oninput = e => send('bri', e.target.value);
+    q('.cct').oninput = e => send('cct', e.target.value);
+    q('.rn').onclick = () => {
+      const n = prompt('Name for this lamp', q('.name').textContent);
+      if (n) post('set', {mac: l.mac, name: n.slice(0, 16)});
+    };
+    q('.rm').onclick = () => {
+      if (confirm(l.self ? 'Take this lamp out of its group?' : 'Remove this lamp from the group?'))
+        post('forget', {mac: l.mac});
+    };
+    $('#lamps').append(d);
+    return d;
+  }
+
+  function draw(s) {
+    pairing = s.pairing;
+    $('#pair').className = pairing ? 'on' : '';
+    $('#pair').textContent = pairing ? 'Pairing… tap to stop' : 'Pair a lamp';
+    $('#msg').textContent = pairing
+      ? 'On the other lamp, hold the group button for 3 seconds until it pulses.'
+      : (s.lamps.length < 2 ? 'No other lamps paired yet.' : '');
+    const seen = {};
+    for (const l of s.lamps) {
+      seen[l.mac] = 1;
+      const d = cards[l.mac] || (cards[l.mac] = card(l)), q = x => d.querySelector(x);
+      d.dataset.on = l.on ? 1 : 0;
+      d.classList.toggle('off', !l.on);
+      q('.name').textContent = l.name;
+      q('.pw').textContent = l.on ? 'On' : 'Off';
+      q('.pw').classList.toggle('on', !!l.on);
+      q('.meta').textContent =
+        (l.self ? 'This lamp' : l.age < 0 ? 'Not heard from yet' : l.age > 45 ? 'Out of reach' : 'Connected') + batt(l.mv);
+      if (Date.now() > hold) { q('.bri').value = l.bri; q('.cct').value = l.cct; }
+      q('.cl').style.display = l.hasCct ? '' : 'none';
+      q('.rm').textContent = l.self ? 'Leave group' : 'Remove';
+      q('.rm').style.display = (l.self && s.lamps.length < 2) ? 'none' : '';
+    }
+    for (const m in cards) if (!seen[m]) { cards[m].remove(); delete cards[m]; }
+
+    $('#fw').textContent = s.fw;
+    $('#ssid').textContent = s.ssid;
+    $('#wpass').textContent = s.wifiPass;
+    $('#volts').textContent = s.lamps[0].mv < 2500 ? 'not connected' : (s.lamps[0].mv / 1000).toFixed(2) + ' V';
+    if (!makerShown) {   // fill the form once, then leave the maker's typing alone
+      makerShown = true;
+      $('#ltype').value = s.lightType;
+      $('#lcount').value = s.ledCount;
+      $('#lmax').value = s.maxPct;
+    }
+  }
+
+  function refresh() {
+    return fetch('/api/state').then(r => r.json()).then(draw)
+      .catch(() => { $('#msg').textContent = 'Lost contact with the lamp.'; });
+  }
+
+  function mmsg(text, bad) {
+    $('#mmsg').textContent = text;
+    $('#mmsg').className = bad ? 'bad' : '';
+  }
+
+  function saveMaker() {
+    fetch('/api/maker', {method: 'POST', body: new URLSearchParams({
+      pass: $('#mpass').value, type: $('#ltype').value, count: $('#lcount').value, max: $('#lmax').value})})
+      .then(r => r.ok ? mmsg('Saved. The lamp is restarting; rejoin its Wi-Fi in a few seconds.')
+                      : r.text().then(t => mmsg(t, true)))
+      .catch(() => mmsg('Lost contact with the lamp.', true));
+  }
+
+  function updateFw() {
+    const f = $('#fwfile').files[0];
+    if (!f) return mmsg('Choose the firmware file first.', true);
+    const body = new FormData();
+    body.append('firmware', f);
+    mmsg('Installing… keep this page open.');
+    fetch('/update?pass=' + encodeURIComponent($('#mpass').value), {method: 'POST', body})
+      .then(r => r.ok ? mmsg('Installed. The lamp is restarting.') : r.text().then(t => mmsg(t, true)))
+      .catch(() => mmsg('Upload interrupted. The lamp is still on its old firmware.', true));
+  }
+
+  refresh();
+  setInterval(refresh, 1500);
+</script>
+</body>
+</html>
