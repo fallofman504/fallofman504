@@ -73,6 +73,16 @@ Cloudflare. Re-run `sudo ./deploy/setup.sh` and enter the SMTP server, port, use
 Until this is set up, reset emails are written to the site log instead of sent. If a customer is locked out in the
 meantime, you can find their link with `docker compose logs app | grep reset-password` and pass it along.
 
+## Private preview (passcode screen)
+
+While you're still building, you can keep the whole site behind a passcode. Set `SITE_PASSCODE=something` in `.env`
+(or answer the setup script's "Preview passcode" question), then run `docker compose up -d`. Every page then asks
+for the passcode first; share it with the people you want to let in. The agent API and Stripe's payment
+notifications keep working, because each checks its own key.
+
+To open the site to the public, clear the line (`SITE_PASSCODE=`) and run `docker compose up -d` again. Changing
+the passcode makes everyone enter the new one.
+
 ## Restoring from a backup
 
 ```bash

@@ -1,5 +1,7 @@
 "use server";
 
+import crypto from "node:crypto";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
@@ -7,6 +9,7 @@ import {
   recordLoginFailure, requireAdmin, requireUser, RESET_LINK_MINUTES, resetPassword, roleForEmail, safeNext, startSession, verifyPassword,
 } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
+import { PREVIEW_COOKIE, previewPasscode, previewToken } from "@/lib/preview";
 import * as data from "@/lib/data";
 import { appUrl, markPaid, mockPaymentsAllowed, startCheckout } from "@/lib/payments";
 import { deleteStoredFiles } from "@/lib/storage";
@@ -14,6 +17,36 @@ import type { Address, Fulfillment, Order, User } from "@/lib/types";
 
 export type FormState = { error?: string; notice?: string } | undefined;
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
+
+// ---------- private preview ----------
+export async function enterPreview(_: FormState, fd: FormData): Promise<FormState> {
+  const passcode = previewPasscode();
+  const next = String(fd.get("next") ?? "");
+  const target = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/";
+  if (!passcode) redirect(target);
+
+  // Wrong guesses are counted per visitor address, with the same pause as failed logins.
+  const h = await headers();
+  const who = `preview:${h.get("cf-connecting-ip") || h.get("x-forwarded-for")?.split(",")[0].trim() || "unknown"}`;
+  const paused = loginPauseMinutes(who);
+  if (paused) return { error: `Too many wrong tries. Please wait ${paused} minute${paused === 1 ? "" : "s"}.` };
+
+  const given = crypto.createHash("sha256").update(String(fd.get("passcode") ?? "").trim()).digest();
+  const wanted = crypto.createHash("sha256").update(passcode).digest();
+  if (!crypto.timingSafeEqual(given, wanted)) {
+    const fails = recordLoginFailure(who);
+    return { error: fails >= MAX_LOGIN_FAILS ? `Too many wrong tries. Please wait ${LOGIN_PAUSE_MINUTES} minutes.` : "That passcode isn't right." };
+  }
+  clearLoginFailures(who);
+  (await cookies()).set(PREVIEW_COOKIE, previewToken(passcode), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" && !process.env.INSECURE_COOKIES,
+    path: "/",
+    maxAge: 30 * 86400,
+  });
+  redirect(target);
+}
 
 // ---------- accounts ----------
 export async function signup(_: FormState, fd: FormData): Promise<FormState> {

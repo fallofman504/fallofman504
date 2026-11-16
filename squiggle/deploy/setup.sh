@@ -56,6 +56,11 @@ ask ADMIN_EMAILS "Email(s) that get the Shop queue, comma-separated" ""
 ask SQUIGGLE_DATA_DIR "Folder for the database and uploaded files (e.g. on your SSD)" "$APP_DIR/data"
 ask BACKUP_DIR "Folder for local backup copies (ideally a different drive)" "$APP_DIR/backups"
 echo
+echo "Private preview: set a passcode to keep the site behind a passcode screen while you build."
+echo "Leave blank to open the site to everyone. (Type 'none' to remove an existing passcode.)"
+ask SITE_PASSCODE "Preview passcode" ""
+[ "$SITE_PASSCODE" = "none" ] && SITE_PASSCODE=""
+echo
 echo "Cloudflare Tunnel token: dash.cloudflare.com -> Networking -> Tunnels -> your tunnel's install command (after --token)."
 echo "(Step-by-step in docs/DEPLOY.md.)"
 ask_secret CLOUDFLARE_TUNNEL_TOKEN "Tunnel token"
@@ -106,6 +111,7 @@ cat > .env <<ENV
 APP_URL=https://$DOMAIN
 ADMIN_EMAILS=$ADMIN_EMAILS
 AGENT_API_KEY=$AGENT_API_KEY
+SITE_PASSCODE=$SITE_PASSCODE
 STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET
 CLOUDFLARE_TUNNEL_TOKEN=$CLOUDFLARE_TUNNEL_TOKEN
