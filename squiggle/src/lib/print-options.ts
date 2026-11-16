@@ -4,6 +4,8 @@
  * and what the agents receive all follow from it.
  */
 
+import { cleanOverrides, DEFAULT_PRINTER, DEFAULT_PROFILE, defaultValue, displayValue, ENABLED_PRINTERS, FIELD_PATH, FIELDS, getPrinter, getProfile, SLICER } from "./slicer";
+
 export type Option = { id: string; label: string };
 type Material = Option & { colors: string[] };
 type Process = {
@@ -12,7 +14,7 @@ type Process = {
   layers: Option[];
   defaultLayer: string;
   supports: Option[];
-  /** Filament-only settings; null means the setting doesn't apply to this process. */
+  /** For filament these three are only used to read requests made before the slicer-matched settings existed. */
   infill: Option[] | null;
   defaultInfill: string | null;
   fuzzySkin: Option[] | null;
@@ -93,7 +95,9 @@ export const PROCESSES = {
 export type ProcessId = keyof typeof PROCESSES;
 const processes: Record<string, Process> = PROCESSES;
 
-export type PrintSpec = {
+/** Resin prints, and filament prints requested before the slicer-matched settings existed. */
+export type BasicPrintSpec = {
+  version?: undefined;
   process: ProcessId;
   material: string;
   color: string;
@@ -104,6 +108,28 @@ export type PrintSpec = {
   quantity: number;
 };
 
+/**
+ * Filament prints: a stock slicer profile plus only the settings the customer changed from it.
+ * `overrides` is keyed by the slicer's own setting names with values in the slicer's own format,
+ * so it can be applied directly in Creality Print.
+ */
+export type SlicerPrintSpec = {
+  version: 2;
+  process: "filament";
+  material: string;
+  color: string;
+  quantity: number;
+  slicer: string;
+  printer: string;
+  printer_name: string;
+  profile: string;
+  profile_name: string;
+  mode: "simple" | "advanced";
+  overrides: Record<string, string>;
+};
+
+export type PrintSpec = BasicPrintSpec | SlicerPrintSpec;
+
 /** Validates form input against the menu. Returns the spec, or a message saying what's wrong. */
 export function parsePrintSpec(get: (key: string) => string): PrintSpec | string {
   const p = processes[get("process")];
@@ -111,22 +137,32 @@ export function parsePrintSpec(get: (key: string) => string): PrintSpec | string
   const material = p.materials.find((m) => m.id === get("material"));
   if (!material) return "Choose a material.";
   if (!material.colors.includes(get("color"))) return "Choose a color available for that material.";
-  if (!p.layers.some((o) => o.id === get("layer"))) return "Choose a layer resolution.";
-  if (!p.supports.some((o) => o.id === get("supports"))) return "Choose a support option.";
-  if (p.infill && !p.infill.some((o) => o.id === get("infill"))) return "Choose an infill density.";
-  if (p.fuzzySkin && !p.fuzzySkin.some((o) => o.id === get("fuzzy_skin"))) return "Choose a fuzzy skin option.";
   const quantity = Number(get("quantity") || "1");
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) return `Quantity must be between 1 and ${MAX_QUANTITY}.`;
-  return {
-    process: get("process") as ProcessId,
-    material: material.id,
-    color: get("color"),
-    layer: get("layer"),
-    infill: p.infill ? get("infill") : null,
-    supports: get("supports"),
-    fuzzy_skin: p.fuzzySkin ? get("fuzzy_skin") : null,
-    quantity,
-  };
+
+  if (get("process") === "filament") {
+    const printer = getPrinter(get("printer") || DEFAULT_PRINTER);
+    if (!printer || !ENABLED_PRINTERS.includes(printer.id)) return "That printer isn't available yet.";
+    const profile = getProfile(printer.id, get("print_profile") || DEFAULT_PROFILE);
+    if (!profile) return "Choose a print profile.";
+    let changed: unknown;
+    try {
+      changed = JSON.parse(get("print_overrides") || "{}");
+    } catch {
+      return "Print settings were not in the expected format.";
+    }
+    const overrides = cleanOverrides(profile, changed);
+    if (typeof overrides === "string") return overrides;
+    return {
+      version: 2, process: "filament", material: material.id, color: get("color"), quantity,
+      slicer: SLICER, printer: printer.id, printer_name: printer.name, profile: profile.id, profile_name: profile.name,
+      mode: get("print_mode") === "advanced" ? "advanced" : "simple", overrides,
+    };
+  }
+
+  if (!p.layers.some((o) => o.id === get("layer"))) return "Choose a layer resolution.";
+  if (!p.supports.some((o) => o.id === get("supports"))) return "Choose a support option.";
+  return { process: get("process") as ProcessId, material: material.id, color: get("color"), layer: get("layer"), infill: null, supports: get("supports"), fuzzy_skin: null, quantity };
 }
 
 /** Human-readable rows for showing a spec to customers, staff, and agents. */
@@ -137,11 +173,23 @@ export function describePrintSpec(spec: PrintSpec): { label: string; value: stri
     { label: "Printing method", value: p?.label ?? spec.process },
     { label: "Material", value: find(p?.materials ?? null, spec.material) },
     { label: "Color", value: spec.color },
-    { label: "Layer resolution", value: find(p?.layers ?? null, spec.layer) },
+    { label: "Quantity", value: String(spec.quantity) },
   ];
-  if (spec.infill != null) rows.push({ label: "Infill density", value: find(p?.infill ?? null, spec.infill) });
+  if (spec.version === 2) {
+    rows.push({ label: "Slicer", value: spec.slicer }, { label: "Print profile", value: spec.profile_name });
+    const profile = getProfile(spec.printer, spec.profile);
+    for (const [key, value] of Object.entries(spec.overrides)) {
+      const field = FIELDS[key];
+      if (!field) { rows.push({ label: key, value }); continue; }
+      const stock = profile ? displayValue(field, defaultValue(profile, key)) : "";
+      rows.push({ label: `${FIELD_PATH[key]} › ${field.label}`, value: `${displayValue(field, value)}${stock ? ` (stock: ${stock})` : ""}` });
+    }
+    if (Object.keys(spec.overrides).length === 0) rows.push({ label: "Changes from the profile", value: "None" });
+    return rows;
+  }
+  rows.splice(3, 0, { label: "Layer resolution", value: find(p?.layers ?? null, spec.layer) });
+  if (spec.infill != null) rows.splice(4, 0, { label: "Infill density", value: find(p?.infill ?? null, spec.infill) });
   rows.push({ label: "Supports", value: find(p?.supports ?? null, spec.supports) });
   if (spec.fuzzy_skin != null) rows.push({ label: "Fuzzy skin", value: find(p?.fuzzySkin ?? null, spec.fuzzy_skin) });
-  rows.push({ label: "Quantity", value: String(spec.quantity) });
   return rows;
 }
