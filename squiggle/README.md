@@ -39,7 +39,8 @@ Payments use Stripe Checkout. Each order creates one payment for an STL (full pr
 | `src/lib/data.ts` | All database reads/writes |
 | `src/lib/auth.ts` | Passwords, sessions, admin and agent checks |
 | `src/lib/payments.ts` | Stripe Checkout, simulated checkout, and what happens when a payment lands |
-| `src/lib/print-options.ts` | The print menu: materials, colors, layer heights, infill, supports, brim threshold. Edit to match the shop. |
+| `src/lib/print-options.ts` | Materials, colors, resin options, brim threshold. Edit to match the shop. |
+| `src/lib/slicer/` | Filament print settings, generated from Creality Print's source by `scripts/extract_creality_print.py` so they match the slicer field for field. |
 | `src/lib/storage.ts` | Upload validation and file storage |
 | `src/app/actions.ts` | Signup/login, messages, placing orders, admin order steps |
 | `src/app/api/agent/*` | API the back-end agents use — see [docs/AGENT_API.md](docs/AGENT_API.md) |

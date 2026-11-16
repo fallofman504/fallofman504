@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 
 /** Page content that traces must keep clear of. */
 const SOLID =
-  "header, footer, main :is(h1, h2, h3, p, a, button, label, input, textarea, select, img, video, li, dl, figure, .card, .card-soft, .badge, [data-solid])";
+  "header :is(a, button, img), footer, main :is(h1, h2, h3, p, a, button, label, input, textarea, select, img, video, li, dl, figure, .card, .card-soft, .badge, [data-solid])";
 const NS = "http://www.w3.org/2000/svg";
 const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
 
@@ -90,7 +90,7 @@ function draw(svg: SVGSVGElement, seedText: string) {
   }
 
   // Buses entering from both page edges, a few lines side by side.
-  for (let y = 5; y < rows - 4; ) {
+  for (let y = 1; y < rows - 4; ) {
     const n = 2 + pick(4);
     for (const side of [0, 1]) {
       if (rnd() < 0.2) continue;
@@ -101,7 +101,7 @@ function draw(svg: SVGSVGElement, seedText: string) {
   // Shorter runs seeded in the open gaps between sections.
   const tries = Math.min(4000, Math.round(cols * rows * 0.09));
   for (let i = 0; i < tries; i++) {
-    const x = 2 + pick(cols - 4), y = 5 + pick(rows - 8);
+    const x = 2 + pick(cols - 4), y = 1 + pick(rows - 4);
     if (at(x, y) || at(x - 1, y) || at(x + 1, y) || at(x, y - 1) || at(x, y + 1)) continue;
     walk(x, y, [0, 2, 4, 6][pick(4)], 6 + pick(26), false);
   }

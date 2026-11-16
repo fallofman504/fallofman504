@@ -4,13 +4,13 @@ import { getUser } from "@/lib/auth";
 
 export function Logo() {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src="/logo.png" alt="Squiggle" width={520} height={221} className="h-10 w-auto sm:h-14" />;
+  return <img src="/logo-lime.png" alt="Squiggle" width={520} height={221} className="h-10 w-auto sm:h-14" />;
 }
 
 export async function SiteHeader() {
   const user = await getUser();
   return (
-    <header className="relative z-10 border-b border-line bg-paper/90 backdrop-blur">
+    <header className="relative z-10 border-b border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5">
         <Link href="/" aria-label="Squiggle home">
           <Logo />

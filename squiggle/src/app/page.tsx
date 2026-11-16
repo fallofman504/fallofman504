@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SlicerWindow } from "@/components/slicer-window";
 import { getUser } from "@/lib/auth";
 
 const steps = [
@@ -6,19 +7,6 @@ const steps = [
   { n: "02", title: "Get a quote in about an hour", body: "We message you a price breakdown. For custom designs you also get a render and a turntable video." },
   { n: "03", title: "Download it or let us make it", body: "Buy the STL and print it yourself, or have Squiggle print it for pickup, Houston delivery, or shipping." },
 ];
-
-/** A printed object drawn as stacked layers. */
-function Layers({ count = 34, className = "" }: { count?: number; className?: string }) {
-  return (
-    <div className={`mx-auto flex flex-col-reverse items-center gap-[3px] ${className}`} aria-hidden>
-      {Array.from({ length: count }, (_, i) => {
-        const t = i / (count - 1);
-        const width = 34 + 30 * Math.sin(t * Math.PI * 1.15 + 0.5) + 22 * t;
-        return <i key={i} className="block h-[7px] rounded-[1px] bg-accent opacity-90" style={{ width: `${width.toFixed(1)}%` }} />;
-      })}
-    </div>
-  );
-}
 
 export default async function Home() {
   const user = await getUser();
@@ -45,10 +33,7 @@ export default async function Home() {
             <Link href={start} className="btn btn-ghost px-6 py-3.5">Start a custom design</Link>
           </div>
         </div>
-        <div className="card relative px-8 pt-12 pb-10" data-solid>
-          <span className="absolute top-3.5 left-9 font-mono text-[10.5px] tracking-[0.08em] text-[#5d6672]">LAYER 034 / 212 · 0.20 MM · PLA</span>
-          <Layers className="w-[58%] max-w-[230px]" />
-        </div>
+        <SlicerWindow />
       </section>
 
       <section className="mx-auto grid max-w-6xl gap-5 px-5 md:grid-cols-3">
