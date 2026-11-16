@@ -8,8 +8,8 @@
   --blue-ink: #173ea8;
   --red: #c8371f;
   --ok: #1f7a4d;
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: var(--font-sans), "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono), "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -185,3 +185,17 @@ footer p { max-width: 70ch; }
 .fmt { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .fmt span { font: 600 12.5px var(--mono); border: 1.5px solid var(--ink); padding: 4px 9px; }
 [hidden] { display: none !important; }
+.preview img { display: block; width: 100%; height: auto; }
+.linkbtn { text-decoration: underline; }
+a.linkbtn { font-size: 15px; }
+details summary { cursor: pointer; font-weight: 600; }
+.files li { align-items: center; }
+.badge { font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; border: 1.5px solid var(--ink); padding: 2px 7px; white-space: nowrap; }
+.badge.hot { background: var(--red); border-color: var(--red); color: #fff; }
+.adminlist { list-style: none; padding: 0; margin: 12px 0 30px; border: 2px solid var(--ink); background: var(--sheet); }
+.adminlist li { border-bottom: 1px solid var(--line); }
+.adminlist li:last-child { border-bottom: 0; }
+.adminlist a { display: grid; grid-template-columns: 120px 1fr auto auto; gap: 14px; padding: 12px 14px; color: var(--ink); text-decoration: none; align-items: center; font-size: 15.5px; }
+.adminlist a:hover { background: #eef2ff; }
+.adminlist .empty { padding: 12px 14px; color: var(--muted); font-size: 15px; }
+@media (max-width: 640px) { .adminlist a { grid-template-columns: 1fr auto; } }
