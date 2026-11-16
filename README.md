@@ -5,6 +5,7 @@ I build personal projects and keep my notes and configs here.
 ## Projects
 
 - [squiggle](squiggle): website for Squiggle, a 3D print and custom fabrication shop in Houston, TX
+- [peerless-plans](peerless-plans): website prototype for Peerless Plans, a commercial real estate drafting studio in Houston, TX
 - [lamps](lamps/SimpleLamp): firmware for simple battery lamps (ESP32-C3) that pair with each other over ESP-NOW
 
 <!-- Add a line for each project you want people to see, e.g.
